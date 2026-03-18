@@ -1,0 +1,187 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Design tokens ───────────────────────────── */
+    --color-primary: #1B4D3E;
+    --color-accent: #C9A96E;
+    --color-background: #FFFFFF;
+    --color-background-secondary: #F9F9F9;
+    --color-text: #1A1A1A;
+    --color-text-secondary: #666666;
+    --color-border: #E5E5E5;
+    --color-error: #DC2626;
+    --color-success: #16A34A;
+    --color-warning: #EA8C00;
+
+    /* ── shadcn/ui HSL tokens ─────────────────────── */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 158 47% 20%;        /* #1B4D3E */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 50% 60%;       /* #C9A96E */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 38 50% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 158 47% 20%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-[var(--color-border)];
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-[var(--color-background)] text-[var(--color-text)];
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-[var(--color-text)];
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl;
+  }
+
+  h2 {
+    @apply text-3xl md:text-4xl;
+  }
+
+  h3 {
+    @apply text-2xl md:text-3xl;
+  }
+
+  p {
+    @apply text-[var(--color-text-secondary)] leading-relaxed;
+  }
+
+  a {
+    @apply text-[var(--color-primary)] hover:text-[var(--color-accent)] transition-colors;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary)]/90 transition-colors rounded-lg px-4 py-2 font-medium;
+  }
+
+  .btn-secondary {
+    @apply bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90 transition-colors rounded-lg px-4 py-2 font-medium;
+  }
+
+  .btn-outline {
+    @apply border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors rounded-lg px-4 py-2 font-medium;
+  }
+
+  .card {
+    @apply rounded-lg border bg-white shadow-sm hover:shadow-md transition-shadow;
+  }
+
+  .container-base {
+    @apply mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .fade-in {
+    animation: fade-in 0.3s ease-in-out;
+  }
+
+  .slide-in {
+    animation: slide-in 0.3s ease-in-out;
+  }
+
+  .badge-primary {
+    @apply inline-flex items-center rounded-full bg-[var(--color-primary)]/10 px-3 py-1 text-sm font-medium text-[var(--color-primary)];
+  }
+
+  .badge-accent {
+    @apply inline-flex items-center rounded-full bg-[var(--color-accent)]/10 px-3 py-1 text-sm font-medium text-[var(--color-accent)];
+  }
+
+  .badge-success {
+    @apply inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800;
+  }
+
+  .badge-error {
+    @apply inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-background-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+/* Firefox */
+* {
+  scrollbar-color: var(--color-primary) var(--color-background-secondary);
+  scrollbar-width: thin;
+}
+
+/* Smooth transitions */
+button,
+a,
+input,
+select,
+textarea {
+  @apply transition-all duration-200;
+}
+
+/* Focus states */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  @apply outline-none ring-2 ring-[var(--color-primary)] ring-offset-2;
+}

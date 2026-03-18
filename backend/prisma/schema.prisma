@@ -1,0 +1,365 @@
+// ============================================================
+// Prisma Schema — Sufi Philosophy Academy
+// Phase 1: User + Auth models
+// Phase 2: Course → CourseModule → Lesson → Material + Enrollment
+// Phase 3: Video (S3-backed, signed-URL streaming)
+// Phase 4: ChatRoom + ChatMessage (WebSocket course chat)
+// Phase 5: LiveSession + LiveParticipant (WebRTC live classes)
+// Phase 6: Notification + ActivityLog (EventEmitter2-driven)
+// ============================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "darwin", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ENUMS ──────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MaterialType {
+  VIDEO
+  AUDIO
+  PDF
+  TEXT
+  LINK
+}
+
+enum EnrollmentStatus {
+  PENDING   // awaiting admin approval
+  ACTIVE    // approved — student has full content access
+  COMPLETED
+  CANCELLED // rejected or cancelled
+}
+
+enum VideoStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum SessionStatus {
+  SCHEDULED // created, not yet started
+  LIVE      // currently running
+  ENDED     // finished
+}
+
+enum ParticipantRole {
+  HOST    // course instructor or admin who owns the session
+  STUDENT // enrolled student
+}
+
+enum NotificationType {
+  COURSE_CREATED
+  STUDENT_ENROLLED
+  LIVE_SESSION_STARTED
+  LIVE_SESSION_ENDED
+  TEACHER_ASSIGNED
+}
+
+enum ActivityEventType {
+  COURSE_CREATED
+  STUDENT_ENROLLED
+  VIDEO_UPLOADED
+  CHAT_MESSAGE_SENT
+  LIVE_SESSION_STARTED
+  LIVE_SESSION_ENDED
+}
+
+// ── USER ───────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  firstName      String
+  lastName       String
+  role           Role     @default(STUDENT)
+  isActive       Boolean  @default(true)
+
+  // Phase 6: Teacher profile fields
+  bio            String?
+  avatarUrl      String?
+  specialization String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Auth relations
+  refreshTokens RefreshToken[]
+
+  // Course relations (Phase 2)
+  taughtCourses Course[]     @relation("InstructorCourses")
+  enrollments   Enrollment[]
+
+  // Chat relations (Phase 4)
+  sentMessages ChatMessage[] @relation("SentMessages")
+
+  // Live relations (Phase 5)
+  hostedSessions     LiveSession[]     @relation("HostedSessions")
+  liveParticipations LiveParticipant[] @relation("SessionParticipants")
+
+  // Notification relations (Phase 6)
+  notifications Notification[]
+
+  @@map("users")
+}
+
+// ── REFRESH TOKEN ──────────────────────────────────────────
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ── COURSE ─────────────────────────────────────────────────
+
+model Course {
+  id           String       @id @default(uuid())
+  title        String
+  description  String?
+  slug         String       @unique
+  status       CourseStatus @default(DRAFT)
+  price        Float?
+  currency     String?      @default("RUB")
+  instructor   User         @relation("InstructorCourses", fields: [instructorId], references: [id])
+  instructorId String
+  modules      CourseModule[]
+  enrollments  Enrollment[]
+  chatRoom     ChatRoom?
+  liveSessions LiveSession[] // Phase 5
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("courses")
+}
+
+// ── COURSE MODULE ──────────────────────────────────────────
+
+model CourseModule {
+  id       String   @id @default(uuid())
+  title    String
+  order    Int
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+  lessons  Lesson[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("course_modules")
+}
+
+// ── LESSON ─────────────────────────────────────────────────
+
+model Lesson {
+  id       String       @id @default(uuid())
+  title    String
+  content  String?
+  order    Int
+  duration Int?
+  module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  moduleId String
+  materials Material[]
+  videos    Video[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("lessons")
+}
+
+// ── MATERIAL ───────────────────────────────────────────────
+
+model Material {
+  id       String       @id @default(uuid())
+  title    String
+  type     MaterialType
+  url      String
+  lesson   Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId String
+  createdAt DateTime    @default(now())
+
+  @@map("materials")
+}
+
+// ── ENROLLMENT ─────────────────────────────────────────────
+
+model Enrollment {
+  id       String           @id @default(uuid())
+  status   EnrollmentStatus @default(PENDING)
+  progress Int              @default(0)
+  user     User             @relation(fields: [userId], references: [id])
+  userId   String
+  course   Course           @relation(fields: [courseId], references: [id])
+  courseId String
+  enrolledAt DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([userId, courseId])
+  @@map("enrollments")
+}
+
+// ── VIDEO ──────────────────────────────────────────────────
+
+model Video {
+  id          String      @id @default(uuid())
+  title       String
+  description String?
+  storageKey  String      @unique
+  mimeType    String      @default("video/mp4")
+  duration    Int?
+  status      VideoStatus @default(PROCESSING)
+  lesson      Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId    String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("videos")
+}
+
+// ── CHAT ROOM ──────────────────────────────────────────────
+
+model ChatRoom {
+  id       String @id @default(uuid())
+  courseId String @unique
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+  createdAt DateTime @default(now())
+
+  @@map("chat_rooms")
+}
+
+// ── CHAT MESSAGE ───────────────────────────────────────────
+
+model ChatMessage {
+  id        String    @id @default(uuid())
+  content   String
+  room      ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String
+  sender    User      @relation("SentMessages", fields: [senderId], references: [id])
+  senderId  String
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Optional reply-to reference (self-relation)
+  replyTo   ChatMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replyToId String?
+  replies   ChatMessage[] @relation("MessageReplies")
+
+  @@index([roomId, createdAt])
+  @@map("chat_messages")
+}
+
+// ── LIVE SESSION ───────────────────────────────────────────
+
+model LiveSession {
+  id        String        @id @default(uuid())
+  title     String
+  status    SessionStatus @default(SCHEDULED)
+
+  // Timestamps set when status transitions
+  startedAt DateTime?
+  endedAt   DateTime?
+
+  // The user who created and owns this session
+  host     User   @relation("HostedSessions", fields: [hostId], references: [id])
+  hostId   String
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  participants LiveParticipant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("live_sessions")
+}
+
+// ── LIVE PARTICIPANT ───────────────────────────────────────
+
+model LiveParticipant {
+  id         String          @id @default(uuid())
+  role       ParticipantRole @default(STUDENT)
+
+  // Real-time state — updated via WebSocket events
+  micEnabled Boolean  @default(false)
+  handRaised Boolean  @default(false)
+
+  // Presence tracking
+  joinedAt   DateTime  @default(now())
+  leftAt     DateTime? // null = currently in session
+
+  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+
+  user   User   @relation("SessionParticipants", fields: [userId], references: [id])
+  userId String
+
+  // One participant record per user per session (re-join updates leftAt → null)
+  @@unique([sessionId, userId])
+  @@map("live_participants")
+}
+
+// ── NOTIFICATION ────────────────────────────────────────────
+
+model Notification {
+  id       String           @id @default(uuid())
+  type     NotificationType
+  title    String
+  body     String
+  isRead   Boolean          @default(false)
+  readAt   DateTime?
+  metadata Json?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ── ACTIVITY LOG ────────────────────────────────────────────
+
+model ActivityLog {
+  id          String            @id @default(uuid())
+  event       ActivityEventType
+  actorId     String?
+  subjectId   String?
+  subjectType String?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@index([actorId, createdAt])
+  @@map("activity_logs")
+}
