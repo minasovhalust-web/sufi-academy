@@ -124,18 +124,18 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             {/* Photo slider */}
             <div className="flex flex-col items-center gap-4">
-              <div className="relative w-[500px] h-[600px]">
+              <div className="relative w-full max-w-[500px]">
                 <img
                   key={photoIndex}
                   src={TEACHER_PHOTOS[photoIndex]}
                   alt={`${TEACHER_NAME} — фото ${photoIndex + 1}`}
-                  className="w-[500px] h-[600px] rounded-2xl object-cover object-top shadow-xl"
+                  className="w-full aspect-[5/6] rounded-2xl object-cover object-top shadow-xl"
                 />
                 {/* Prev button */}
                 {TEACHER_PHOTOS.length > 1 && (
                   <button
                     onClick={prevPhoto}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-5 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors border border-gray-100"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors border border-gray-100"
                     aria-label="Предыдущее фото"
                   >
                     <ChevronLeft className="h-5 w-5 text-gray-600" />
@@ -145,7 +145,7 @@ export default function HomePage() {
                 {TEACHER_PHOTOS.length > 1 && (
                   <button
                     onClick={nextPhoto}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-5 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors border border-gray-100"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center hover:bg-gray-50 transition-colors border border-gray-100"
                     aria-label="Следующее фото"
                   >
                     <ChevronRight className="h-5 w-5 text-gray-600" />
@@ -201,12 +201,12 @@ export default function HomePage() {
       {/* Featured Courses Section */}
       <section id="features" className="py-20 bg-white">
         <div className="container-base">
-          <div className="flex items-center justify-between mb-12">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-12">
             <div>
               <h2 className="text-3xl font-bold mb-2">Популярные курсы</h2>
               <p className="text-[var(--color-text-secondary)]">Начните свой путь духовного развития</p>
             </div>
-            <Button variant="outline" asChild>
+            <Button variant="outline" asChild className="self-start sm:self-auto shrink-0">
               <Link href="/courses">Смотреть все курсы</Link>
             </Button>
           </div>

@@ -29,17 +29,17 @@ export default function CoursesPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="container-base py-12">
+      <div className="container-base py-8 md:py-12">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold mb-2">Каталог курсов</h1>
+        <div className="mb-8 md:mb-12">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">Каталог курсов</h1>
           <p className="text-[var(--color-text-secondary)]">
             Выберите курс и начните свой путь духовного развития
           </p>
         </div>
 
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6 md:mb-8">
           <Input
             placeholder="Поиск курсов..."
             value={search}

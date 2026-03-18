@@ -90,33 +90,35 @@ export default function AdminPage() {
     <ProtectedRoute requiredRole="ADMIN">
       <div className="min-h-screen bg-white">
         <div className="container-base py-12">
-          <h1 className="text-4xl font-bold mb-8">Администрация</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8">Администрация</h1>
 
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList>
-              <TabsTrigger value="overview">Обзор</TabsTrigger>
-              <TabsTrigger value="enrollments" className="relative">
-                Заявки
-                {pendingCount > 0 && (
-                  <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold">
-                    {pendingCount}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="users">Пользователи</TabsTrigger>
-              <TabsTrigger value="courses">Курсы</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+              <TabsList className="w-max min-w-full md:w-auto">
+                <TabsTrigger value="overview">Обзор</TabsTrigger>
+                <TabsTrigger value="enrollments" className="relative">
+                  Заявки
+                  {pendingCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold">
+                      {pendingCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="users">Пользователи</TabsTrigger>
+                <TabsTrigger value="courses">Курсы</TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="space-y-6">
               {statsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <Skeleton key={i} className="h-24" />
                   ))}
                 </div>
               ) : stats ? (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="text-sm font-medium text-[var(--color-text-secondary)]">
@@ -194,7 +196,7 @@ export default function AdminPage() {
 
             {/* Enrollments Tab */}
             <TabsContent value="enrollments" className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-start gap-3 justify-between">
                 <div>
                   <h2 className="text-xl font-semibold">Заявки на обучение</h2>
                   <p className="text-sm text-[var(--color-text-secondary)] mt-1">
@@ -202,7 +204,7 @@ export default function AdminPage() {
                   </p>
                 </div>
                 {pendingCount > 0 && (
-                  <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                  <Badge className="bg-amber-100 text-amber-800 border-amber-200 shrink-0">
                     {pendingCount} ожидает
                   </Badge>
                 )}

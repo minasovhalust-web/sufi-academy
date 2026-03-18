@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   BookOpen,
   Play,
+  Menu,
   FileText,
   File as FileIconLucide,
   Link as LinkIcon,
@@ -821,6 +822,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<ActiveTab>('lesson')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Derive the active Lesson object from already-loaded modules data.
   // This avoids a separate fetch to /lessons/:id (which is a nested-only route).
@@ -865,6 +867,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
     setActiveLessonId(lessonId)
     setExpandedModules((prev) => new Set(Array.from(prev).concat(moduleId)))
     setActiveTab('lesson')
+    setSidebarOpen(false) // auto-close on mobile after selecting a lesson
   }
 
   // Loading skeleton
@@ -933,18 +936,29 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
     <div className="min-h-screen bg-gray-50 flex flex-col">
 
       {/* Top bar */}
-      <header className="sticky top-0 z-30 bg-white border-b px-6 py-3 flex items-center gap-4 shrink-0">
-        <Button asChild variant="ghost" size="sm" className="-ml-2">
+      <header className="sticky top-0 z-30 bg-white border-b px-3 md:px-6 py-3 flex items-center gap-2 md:gap-4 shrink-0">
+        {/* Sidebar toggle — mobile only */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="md:hidden shrink-0 px-2"
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="Содержание курса"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
+        <Button asChild variant="ghost" size="sm" className="-ml-1 shrink-0">
           <Link href={`/courses/${params.courseId}`}>
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Назад
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Назад</span>
           </Link>
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="font-semibold truncate">{course.title}</h1>
+          <h1 className="font-semibold truncate text-sm md:text-base">{course.title}</h1>
         </div>
         {myEnrollment && (
-          <Badge variant="outline" className="shrink-0 text-xs">
+          <Badge variant="outline" className="shrink-0 text-xs hidden sm:flex">
             {myEnrollment.status === 'COMPLETED' ? (
               <>
                 <CheckCircle2 className="h-3 w-3 mr-1 text-green-500" />
@@ -961,10 +975,24 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
       </header>
 
       {/* Split layout */}
-      <div className="flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+      <div className="relative flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+
+        {/* Mobile backdrop — tap outside to close */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-10 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
         {/* Left sidebar — course outline */}
-        <aside className="w-80 shrink-0 bg-white border-r overflow-y-auto">
+        <aside className={`
+          absolute md:relative inset-y-0 left-0 z-20
+          w-72 md:w-80 shrink-0 bg-white border-r overflow-y-auto
+          transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:translate-x-0
+        `}>
           <div className="p-4 border-b">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
               Содержание курса

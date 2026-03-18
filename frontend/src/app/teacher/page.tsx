@@ -91,7 +91,7 @@ export default function TeacherPage() {
     <ProtectedRoute requiredRole="TEACHER">
       <div className="min-h-screen bg-white">
         <div className="container-base py-12">
-          <h1 className="text-4xl font-bold mb-2">Панель преподавателя</h1>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2">Панель преподавателя</h1>
           <p className="text-[var(--color-text-secondary)] mb-8">
             Управляйте своими курсами и содержимым
           </p>
@@ -201,7 +201,7 @@ export default function TeacherPage() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="price">Цена</Label>
                         <Input

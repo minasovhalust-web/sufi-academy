@@ -14,6 +14,7 @@ export function Navbar() {
   const handleLogout = () => {
     clearAuth()
     router.push('/')
+    setMobileMenuOpen(false)
   }
 
   const navLinks = [
@@ -28,54 +29,117 @@ export function Navbar() {
   return (
     <nav className="sticky top-0 z-40 border-b bg-white/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-lg">
-            <img src="/logo.png" alt="Логотип" className="w-8 h-8 rounded-full object-cover" />
-            Академия Суфийской Философии
+        <div className="flex h-16 items-center justify-between gap-2">
+
+          {/* Brand */}
+          <Link href="/" className="flex items-center gap-2 font-semibold text-base shrink-0">
+            <img src="/logo.png" alt="Логотип" className="w-8 h-8 rounded-full object-cover shrink-0" />
+            <span className="hidden sm:inline truncate">Академия Суфийской Философии</span>
+            <span className="sm:hidden">АСФ</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8">
+          {/* Desktop nav links */}
+          <div className="hidden md:flex items-center gap-6 flex-1 justify-center">
             {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="text-sm font-medium hover:text-gray-600 transition-colors">
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium hover:text-gray-600 transition-colors whitespace-nowrap"
+              >
                 {link.label}
               </Link>
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          {/* Desktop auth buttons */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             {isAuthenticated ? (
               <>
-                <span className="text-sm font-medium">{user?.firstName}</span>
-                <button onClick={handleLogout} className="text-sm px-4 py-2 border rounded-md hover:bg-gray-50">
+                <span className="text-sm font-medium text-gray-700">{user?.firstName}</span>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm px-3 py-1.5 border rounded-md hover:bg-gray-50"
+                >
                   Выйти
                 </button>
               </>
             ) : (
               <>
-                <Link href="/auth/login" className="text-sm px-4 py-2 border rounded-md hover:bg-gray-50">
+                <Link
+                  href="/auth/login"
+                  className="text-sm px-3 py-1.5 border rounded-md hover:bg-gray-50"
+                >
                   Войти
                 </Link>
-                <Link href="/auth/register" className="text-sm px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800">
+                <Link
+                  href="/auth/register"
+                  className="text-sm px-3 py-1.5 bg-gray-900 text-white rounded-md hover:bg-gray-800"
+                >
                   Регистрация
                 </Link>
               </>
             )}
-            <button className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
           </div>
+
+          {/* Mobile burger button */}
+          <button
+            className="md:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
 
+        {/* Mobile dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t py-4">
-            <div className="flex flex-col gap-2">
-              {navLinks.map((link) => (
-                <Link key={link.href} href={link.href} className="px-4 py-2 text-sm hover:bg-gray-50 rounded"
-                  onClick={() => setMobileMenuOpen(false)}>
-                  {link.label}
+          <div className="md:hidden border-t py-3 space-y-1">
+            {/* Nav links */}
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+
+            {/* Divider */}
+            <div className="border-t my-2" />
+
+            {/* Auth actions */}
+            {isAuthenticated ? (
+              <div className="space-y-1">
+                <div className="px-3 py-2 text-sm text-gray-500">
+                  Вы вошли как <span className="font-semibold text-gray-800">{user?.firstName} {user?.lastName}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors text-red-600"
+                >
+                  Выйти
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2 pt-1 pb-1 px-1">
+                <Link
+                  href="/auth/login"
+                  className="flex justify-center px-3 py-2.5 text-sm font-medium border rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Войти
                 </Link>
-              ))}
-            </div>
+                <Link
+                  href="/auth/register"
+                  className="flex justify-center px-3 py-2.5 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Регистрация
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </div>
