@@ -220,10 +220,7 @@ export const teacherApi = {
 
 // Videos API
 export const videosApi = {
-  // Step 1 of upload: get pre-signed S3 PUT URL
-  requestUploadUrl: (dto: { lessonId: string; title: string; mimeType: string; description?: string }) =>
-    apiClient.post('/videos/upload-url', dto),
-  // Step 3 of upload: persist video record after S3 upload completes
+  // Upload flow: POST /storage/upload → get url → POST /videos with storageKey: url
   create: (dto: { lessonId: string; title: string; storageKey: string; mimeType: string; duration?: number; description?: string }) =>
     apiClient.post('/videos', dto),
   getByLesson: (lessonId: string) => apiClient.get(`/videos/lesson/${lessonId}`),
