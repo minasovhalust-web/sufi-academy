@@ -24,8 +24,7 @@ import { RequestUploadUrlDto } from '../dto/request-upload-url.dto';
  * Upload flow — client-side direct upload to S3:
  *   POST /videos/upload-url   → { uploadUrl, key, expiresIn }
  *     Client PUTs the file directly to S3 using uploadUrl
- *   POST /videos              → { id, storageKey, status: PROCESSING, … }
- *     Client calls PATCH /videos/:id to set status READY + duration
+ *   POST /videos              → { id, storageKey, status: READY, … }
  *
  * Streaming — all video access is via signed, time-limited URLs:
  *   GET /videos/:id/stream-url → { streamUrl, expiresIn: 300 }
@@ -60,7 +59,7 @@ export class VideosController {
 
   /**
    * Step 3 of the upload flow (after the client has PUT the file to S3).
-   * Registers the video record in the database with status PROCESSING.
+   * Registers the video record in the database with status READY.
    */
   @Post()
   create(@Body() dto: CreateVideoDto, @Req() req: any) {
@@ -92,8 +91,7 @@ export class VideosController {
   // ── Mutate ─────────────────────────────────────────────────
 
   /**
-   * Update metadata or transition status (e.g. PROCESSING → READY).
-   * Call after the client has successfully uploaded and can report duration.
+   * Update metadata or status (title, description, duration, etc.).
    */
   @Patch(':id')
   update(

@@ -232,7 +232,7 @@ model Video {
   storageKey  String      @unique
   mimeType    String      @default("video/mp4")
   duration    Int?
-  status      VideoStatus @default(PROCESSING)
+  status      VideoStatus @default(READY)
   lesson      Lesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   lessonId    String
   createdAt   DateTime    @default(now())
