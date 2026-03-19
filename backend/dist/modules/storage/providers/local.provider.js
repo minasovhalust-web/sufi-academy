@@ -24,7 +24,7 @@ let LocalProvider = LocalProvider_1 = class LocalProvider {
             (0, fs_1.mkdirSync)(this.uploadDir, { recursive: true });
         }
         const port = this.config.get('APP_PORT', '4000');
-        this.baseUrl = `http://localhost:${port}`;
+        this.baseUrl = `http://95.179.187.108:${port}`;
         this.logger.warn('LocalProvider active — files saved to ./uploads/. Set STORAGE_BUCKET to use S3.');
     }
     async upload(buffer, key, _mimeType) {

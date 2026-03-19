@@ -31,7 +31,7 @@ export class LocalProvider implements StorageService {
     }
 
     const port = this.config.get<string>('APP_PORT', '4000');
-    this.baseUrl = `http://localhost:${port}`;
+    this.baseUrl = `http://95.179.187.108:${port}`;
     this.logger.warn(
       'LocalProvider active — files saved to ./uploads/. Set STORAGE_BUCKET to use S3.',
     );
