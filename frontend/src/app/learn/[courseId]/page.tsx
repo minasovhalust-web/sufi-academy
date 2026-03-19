@@ -417,7 +417,7 @@ function ChatPanel({ courseId }: { courseId: string }) {
   useEffect(() => {
     if (!accessToken) return
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://95.179.187.108:4000/api/v1'
     const socketBase = apiBase.replace(/\/api\/v1\/?$/, '')
 
     const sock = io(`${socketBase}/chat`, {

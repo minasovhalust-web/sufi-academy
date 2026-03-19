@@ -16,7 +16,7 @@ interface ChatBoxProps {
   courseId: string
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000'
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL || (process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://95.179.187.108:4000')
 
 export function ChatBox({ courseId }: ChatBoxProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])

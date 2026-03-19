@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import type { LoginDto, RegisterDto } from '@/types'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://95.179.187.108:4000/api/v1'
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
