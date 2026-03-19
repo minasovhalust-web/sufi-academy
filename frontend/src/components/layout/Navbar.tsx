@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
@@ -8,14 +8,21 @@ import { useAuthStore } from '@/store/auth.store'
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
   const { isAuthenticated, user, clearAuth, isTeacher, isAdmin } = useAuthStore()
+
+  // Prevent hydration mismatch caused by Zustand reading localStorage only on client.
+  useEffect(() => { setMounted(true) }, [])
 
   const handleLogout = () => {
     clearAuth()
     router.push('/')
     setMobileMenuOpen(false)
   }
+
+  // All hooks above. Auth-dependent rendering is safe only after mount.
+  if (!mounted) return null
 
   const navLinks = [
     { label: 'Главная', href: '/' },

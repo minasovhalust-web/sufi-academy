@@ -807,6 +807,10 @@ function ChatPanel({ courseId }: { courseId: string }) {
 type ActiveTab = 'lesson' | 'chat'
 
 export default function LearnPage({ params }: { params: { courseId: string } }) {
+  // Prevent hydration mismatch: Zustand reads localStorage only on the client,
+  // so auth state differs between server render and first client render.
+  const [mounted, setMounted] = useState(false)
+
   const router = useRouter()
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
@@ -833,6 +837,8 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
   const enrollments = enrollmentsData || []
   const myEnrollment = enrollments.find((e) => e.courseId === params.courseId)
 
+  useEffect(() => { setMounted(true) }, [])
+
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace(`/auth/login?redirect=/learn/${params.courseId}`)
@@ -847,12 +853,16 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
     }
   }, [enrollmentsLoading, enrollmentsData, myEnrollment, params.courseId, router])
 
-  // Auto-expand first module
+  // Auto-expand first module when modules first load.
+  // Uses the functional updater so `expandedModules` is not needed in deps.
   useEffect(() => {
-    if (modules.length > 0 && expandedModules.size === 0) {
-      setExpandedModules(new Set([modules[0].id]))
+    if (modules.length > 0) {
+      setExpandedModules((prev) => (prev.size === 0 ? new Set([modules[0].id]) : prev))
     }
   }, [modules])
+
+  // All hooks above this line. Early returns below are safe.
+  if (!mounted) return null
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules((prev) => {
