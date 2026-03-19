@@ -36,6 +36,8 @@ let LocalProvider = LocalProvider_1 = class LocalProvider {
         return { key, url };
     }
     async getSignedUrl(key, _ttlSeconds) {
+        if (key.startsWith('http'))
+            return key;
         const filename = key.replace(/\//g, '_');
         return `${this.baseUrl}/uploads/${filename}`;
     }

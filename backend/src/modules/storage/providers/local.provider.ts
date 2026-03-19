@@ -52,6 +52,7 @@ export class LocalProvider implements StorageService {
   }
 
   async getSignedUrl(key: string, _ttlSeconds?: number): Promise<string> {
+    if (key.startsWith('http')) return key;
     const filename = key.replace(/\//g, '_');
     return `${this.baseUrl}/uploads/${filename}`;
   }
