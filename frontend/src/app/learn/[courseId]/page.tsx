@@ -11,7 +11,7 @@ import {
   useCourseMaterials,
 } from '@/hooks/api/useCourses'
 import { useVideosByLesson } from '@/hooks/api/useVideos'
-import { videosApi, chatApi, storageApi } from '@/lib/api'
+import { chatApi, storageApi } from '@/lib/api'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -71,23 +71,6 @@ interface ChatMessage {
 // ── VideoPlayer ─────────────────────────────────────────────────────────────
 
 function VideoPlayer({ video }: { video: Video }) {
-  const [streamUrl, setStreamUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-
-  useEffect(() => {
-    setLoading(true)
-    setError(false)
-    videosApi
-      .getStreamUrl(video.id)
-      .then((res) => {
-        const url = (res.data.data as { url: string }).url
-        setStreamUrl(url)
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
-  }, [video.id])
-
   const formatDuration = (secs?: number) => {
     if (!secs) return ''
     const m = Math.floor(secs / 60)
@@ -95,16 +78,7 @@ function VideoPlayer({ video }: { video: Video }) {
     return `${m}:${s.toString().padStart(2, '0')}`
   }
 
-  if (video.status === 'PROCESSING') {
-    return (
-      <div className="flex items-center gap-2 p-4 rounded-lg bg-amber-50 border border-amber-100 text-sm text-amber-700">
-        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-        Видео обрабатывается, попробуйте позже
-      </div>
-    )
-  }
-
-  if (video.status === 'FAILED' || error) {
+  if (video.status === 'FAILED') {
     return (
       <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 border border-red-100 text-sm text-red-600">
         <AlertCircle className="h-4 w-4 shrink-0" />
@@ -113,15 +87,13 @@ function VideoPlayer({ video }: { video: Video }) {
     )
   }
 
-  if (loading) {
-    return <Skeleton className="w-full aspect-video rounded-lg" />
-  }
-
+  // storageKey already contains the full URL to the file — use it directly
+  // as the video src without an extra round-trip to /stream-url.
   return (
     <div className="space-y-1.5">
       <video
         controls
-        src={streamUrl ?? undefined}
+        src={video.storageKey}
         className="w-full rounded-lg bg-black aspect-video"
         preload="metadata"
       />
