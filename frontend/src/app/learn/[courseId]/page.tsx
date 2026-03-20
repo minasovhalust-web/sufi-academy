@@ -762,7 +762,7 @@ function ChatPanel({ courseId }: { courseId: string }) {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Сообщение… (Enter — отправить, Shift+Enter — перенос)"
+            placeholder="Сообщение…"
             rows={2}
             className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] placeholder:text-gray-400"
             disabled={!connected || uploading}
