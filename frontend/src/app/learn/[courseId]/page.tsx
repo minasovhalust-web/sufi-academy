@@ -40,6 +40,7 @@ import {
   X,
   FileIcon,
   CornerUpLeft,
+  Trash2,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -369,6 +370,8 @@ function ChatPanel({ courseId }: { courseId: string }) {
   const cancelledRef = useRef(false)
 
   const accessToken = useAuthStore((state) => state.accessToken)
+  const user = useAuthStore((state) => state.user)
+  const isAdmin = user?.role === 'ADMIN'
 
   // ── Load initial REST history ────────────────────────────────────────────
   useEffect(() => {
@@ -451,6 +454,12 @@ function ChatPanel({ courseId }: { courseId: string }) {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
     }
   }, [])
+
+  // ── Delete message via WebSocket (admin only) ────────────────────────────
+  const handleDeleteMessage = (messageId: string) => {
+    if (!socketRef.current?.connected) return
+    socketRef.current.emit('delete-message', { messageId })
+  }
 
   // ── Send text via WebSocket ───────────────────────────────────────────────
   const sendTextMessage = (content: string) => {
@@ -638,19 +647,31 @@ function ChatPanel({ courseId }: { courseId: string }) {
                 <span className="text-xs text-gray-400 shrink-0">
                   {formatMessageTime(msg.createdAt)}
                 </span>
-                {/* Reply button — visible on hover */}
+                {/* Action buttons — visible on hover */}
                 {!msg.deletedAt && hoveredMessageId === msg.id && (
-                  <button
-                    onClick={() => {
-                      setReplyingTo(msg)
-                      inputRef.current?.focus()
-                    }}
-                    title="Ответить"
-                    className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                  >
-                    <CornerUpLeft className="h-3.5 w-3.5" />
-                    Ответить
-                  </button>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setReplyingTo(msg)
+                        inputRef.current?.focus()
+                      }}
+                      title="Ответить"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      <CornerUpLeft className="h-3.5 w-3.5" />
+                      Ответить
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        title="Удалить сообщение"
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Удалить
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               <MessageBubble
