@@ -456,9 +456,11 @@ function ChatPanel({ courseId }: { courseId: string }) {
   }, [])
 
   // ── Delete message via WebSocket (admin only) ────────────────────────────
+  // Backend requires both messageId and courseId: courseId is used to broadcast
+  // the 'message-deleted' event to all clients in the correct room.
   const handleDeleteMessage = (messageId: string) => {
     if (!socketRef.current?.connected) return
-    socketRef.current.emit('delete-message', { messageId })
+    socketRef.current.emit('delete-message', { messageId, courseId })
   }
 
   // ── Send text via WebSocket ───────────────────────────────────────────────

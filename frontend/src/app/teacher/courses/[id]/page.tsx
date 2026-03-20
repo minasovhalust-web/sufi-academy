@@ -118,6 +118,16 @@ function VideoSection({ lessonId }: { lessonId: string }) {
 
   const isUploading = uploadState === 'uploading' || uploadState === 'saving'
 
+  const handleDeleteVideo = async (videoId: string) => {
+    try {
+      await videosApi.delete(videoId)
+      invalidateVideos()
+      toast.success('Видео удалено')
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Ошибка удаления видео')
+    }
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0] ?? null
     if (!picked) return
@@ -223,7 +233,7 @@ function VideoSection({ lessonId }: { lessonId: string }) {
             return (
               <li
                 key={v.id}
-                className="flex items-center gap-2.5 p-2.5 rounded-lg bg-purple-50 border border-purple-100 text-sm"
+                className="flex items-center gap-2.5 p-2.5 rounded-lg bg-purple-50 border border-purple-100 text-sm group"
               >
                 <Play className="h-4 w-4 text-purple-400 shrink-0" />
                 <span className="flex-1 font-medium truncate">{v.title}</span>
@@ -236,6 +246,15 @@ function VideoSection({ lessonId }: { lessonId: string }) {
                   {cfg.icon}
                   {cfg.label}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteVideo(v.id)}
+                  disabled={isUploading}
+                  title="Удалить видео"
+                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity shrink-0"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </li>
             )
           })}
