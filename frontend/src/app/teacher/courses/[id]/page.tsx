@@ -158,13 +158,18 @@ function VideoSection({ lessonId }: { lessonId: string }) {
       // storageKey is the URL returned by the upload endpoint — the backend
       // uses it as the stable reference to the file.
       setUploadState('saving')
-      await videosApi.create({
+      const createRes = await videosApi.create({
         lessonId,
         title: videoTitle.trim(),
         storageKey: url,
         mimeType: file.type,
         duration,
       })
+
+      // Step 3: mark the video as READY immediately — we have no async
+      // processing pipeline, so the video is playable right after upload.
+      const videoId = (createRes.data.data as { id: string }).id
+      await videosApi.update(videoId, { status: 'READY' })
 
       invalidateVideos()
       toast.success('Видео успешно загружено')
