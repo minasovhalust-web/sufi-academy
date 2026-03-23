@@ -38,7 +38,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getRoleLabel, getCourseStatusLabel, getInitials } from '@/lib/utils'
-import { Trash2, Check, X, Clock } from 'lucide-react'
+import { Trash2, Check, X, Clock, Mail } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/store/auth.store'
 
 const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
   PENDING: 'На рассмотрении',
@@ -48,6 +50,8 @@ const ENROLLMENT_STATUS_LABELS: Record<string, string> = {
 }
 
 export default function AdminPage() {
+  const router = useRouter()
+  const { user: currentUser } = useAuthStore()
   const { data: statsData, isLoading: statsLoading } = useAdminDashboard()
   const { data: usersData, isLoading: usersLoading } = useAdminUsers({ page: 1, limit: 20 })
   const { data: coursesData, isLoading: coursesLoading } = useAdminCourses({ page: 1, limit: 20 })
@@ -399,7 +403,20 @@ export default function AdminPage() {
                                   </div>
                                 </td>
                                 <td className="p-2">
-                                  <Badge variant="outline">{getRoleLabel(user.role)}</Badge>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline">{getRoleLabel(user.role)}</Badge>
+                                    {user.id !== currentUser?.id && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
+                                        onClick={() => router.push(`/messages/${user.id}`)}
+                                      >
+                                        <Mail className="h-3.5 w-3.5 mr-1" />
+                                        Написать
+                                      </Button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}

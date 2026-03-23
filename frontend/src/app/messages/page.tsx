@@ -1,15 +1,17 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { useAuthStore } from '@/store/auth.store'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useConversations } from '@/hooks/api/useDirectMessages'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MessageSquare, Search } from 'lucide-react'
+import { MessageSquare, Search, Plus, X } from 'lucide-react'
 import type { Conversation } from '@/types'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { adminApi } from '@/lib/api'
 
 // ── Avatar ────────────────────────────────────────────────────────────────────
 
@@ -87,12 +89,129 @@ function ConversationItem({
   )
 }
 
+// ── New Dialog Modal ──────────────────────────────────────────────────────────
+
+interface UserPickerUser {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  avatarUrl?: string | null
+  role: string
+}
+
+function NewDialogModal({
+  currentUserId,
+  onClose,
+}: {
+  currentUserId: string
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [pickerSearch, setPickerSearch] = useState('')
+  const [allUsers, setAllUsers] = useState<UserPickerUser[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+
+  useEffect(() => {
+    setLoadingUsers(true)
+    adminApi
+      .getUsers({ limit: 200 })
+      .then((res) => {
+        const data = res.data?.data?.data as UserPickerUser[] | undefined
+        setAllUsers((data ?? []).filter((u) => u.id !== currentUserId))
+      })
+      .catch(() => setAllUsers([]))
+      .finally(() => setLoadingUsers(false))
+  }, [currentUserId])
+
+  const filteredUsers = allUsers.filter((u) => {
+    const name = `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase()
+    return name.includes(pickerSearch.toLowerCase())
+  })
+
+  const handleSelect = (userId: string) => {
+    onClose()
+    router.push(`/messages/${userId}`)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden max-h-[80vh]">
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">Новый диалог</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            aria-label="Закрыть"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Поиск пользователей…"
+              value={pickerSearch}
+              onChange={(e) => setPickerSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 transition"
+            />
+          </div>
+        </div>
+
+        {/* User list */}
+        <div className="overflow-y-auto flex-1">
+          {loadingUsers ? (
+            <div className="divide-y divide-gray-100">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                  <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              <p className="text-sm">Пользователи не найдены</p>
+            </div>
+          ) : (
+            filteredUsers.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => handleSelect(u.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 text-left"
+              >
+                <Avatar name={`${u.firstName} ${u.lastName}`} avatarUrl={u.avatarUrl} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-gray-900 truncate">
+                    {u.firstName} {u.lastName}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
   const { user } = useAuthStore()
   const { data: conversations, isLoading } = useConversations()
   const [search, setSearch] = useState('')
+  const [newDialogOpen, setNewDialogOpen] = useState(false)
 
   const filtered = (conversations ?? []).filter((c) => {
     const name = `${c.user.firstName} ${c.user.lastName}`.toLowerCase()
@@ -105,9 +224,18 @@ export default function MessagesPage() {
         <div className="max-w-2xl mx-auto py-8 px-4">
 
           {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <MessageSquare className="h-6 w-6 text-purple-600" />
-            <h1 className="text-2xl font-bold">Сообщения</h1>
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-6 w-6 text-purple-600" />
+              <h1 className="text-2xl font-bold">Сообщения</h1>
+            </div>
+            <button
+              onClick={() => setNewDialogOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              Новый диалог
+            </button>
           </div>
 
           {/* Search */}
@@ -144,7 +272,7 @@ export default function MessagesPage() {
                 ) : (
                   <>
                     <p className="text-sm font-medium text-gray-500 mb-1">Нет диалогов</p>
-                    <p className="text-xs">Напишите другому пользователю, чтобы начать переписку</p>
+                    <p className="text-xs">Нажмите «Новый диалог», чтобы начать переписку</p>
                   </>
                 )}
               </div>
@@ -163,6 +291,14 @@ export default function MessagesPage() {
 
         </div>
       </div>
+
+      {/* New Dialog Modal */}
+      {newDialogOpen && (
+        <NewDialogModal
+          currentUserId={user?.id ?? ''}
+          onClose={() => setNewDialogOpen(false)}
+        />
+      )}
     </ProtectedRoute>
   )
 }

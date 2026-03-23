@@ -41,6 +41,7 @@ import {
   FileIcon,
   CornerUpLeft,
   Trash2,
+  Mail,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -372,6 +373,7 @@ function ChatPanel({ courseId }: { courseId: string }) {
   const accessToken = useAuthStore((state) => state.accessToken)
   const user = useAuthStore((state) => state.user)
   const isAdmin = user?.role === 'ADMIN'
+  const router = useRouter()
 
   // ── Load initial REST history ────────────────────────────────────────────
   useEffect(() => {
@@ -663,6 +665,16 @@ function ChatPanel({ courseId }: { courseId: string }) {
                       <CornerUpLeft className="h-3.5 w-3.5" />
                       Ответить
                     </button>
+                    {msg.senderId !== user?.id && (
+                      <button
+                        onClick={() => router.push(`/messages/${msg.senderId}`)}
+                        title="Написать лично"
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Написать лично
+                      </button>
+                    )}
                     {isAdmin && (
                       <button
                         onClick={() => handleDeleteMessage(msg.id)}
