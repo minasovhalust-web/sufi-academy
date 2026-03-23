@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import {
@@ -20,7 +21,7 @@ import {
   useInvalidateVideos,
   readMediaDuration,
 } from '@/hooks/api/useVideos'
-import { videosApi, apiClient } from '@/lib/api'
+import { videosApi, apiClient, liveApi } from '@/lib/api'
 import type { CourseModule, Lesson, Material, Video } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,6 +53,7 @@ import {
   AlertCircle,
   Clock,
   Play,
+  Radio,
 } from 'lucide-react'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -689,6 +691,7 @@ export default function TeacherCourseManagePage({
   params: { id: string }
 }) {
   const courseId = params.id
+  const router = useRouter()
 
   const { data: courseData, isLoading: courseLoading } = useCourse(courseId)
   const { data: modulesData, isLoading: modulesLoading } = useCourseModules(courseId)
@@ -700,6 +703,23 @@ export default function TeacherCourseManagePage({
   const [editingPrice, setEditingPrice] = useState(false)
   const [priceValue, setPriceValue] = useState('')
   const [currencyValue, setCurrencyValue] = useState('RUB')
+  const [creatingLiveSession, setCreatingLiveSession] = useState(false)
+
+  const handleCreateLiveSession = async () => {
+    setCreatingLiveSession(true)
+    try {
+      const res = await liveApi.createSession({
+        courseId,
+        title: `Живой урок — ${courseData?.title ?? new Date().toLocaleDateString('ru-RU')}`,
+      })
+      const session = res.data?.data ?? res.data
+      toast.success('Живой урок создан')
+      router.push(`/live/${session.id}`)
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Не удалось создать живой урок')
+      setCreatingLiveSession(false)
+    }
+  }
 
   const course = courseData
   const modules: CourseModule[] = modulesData ?? []
@@ -832,8 +852,30 @@ export default function TeacherCourseManagePage({
             <p className="text-red-500 mb-8">Курс не найден</p>
           )}
 
+          {/* Live session button */}
+          {course && (
+            <div className="mt-6 pt-5 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold">Живые уроки</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Проведите видеоурок в прямом эфире для студентов курса
+                  </p>
+                </div>
+                <Button
+                  onClick={handleCreateLiveSession}
+                  disabled={creatingLiveSession}
+                  className="gap-2 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Radio className="h-4 w-4" />
+                  {creatingLiveSession ? 'Создание...' : 'Создать живой урок'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Modules section */}
-          <div className="space-y-4">
+          <div className="space-y-4 mt-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Модули курса</h2>
               {!addingModule && (

@@ -218,6 +218,18 @@ export const teacherApi = {
   createLiveSession: (dto: unknown) => apiClient.post('/live/sessions', dto),
 }
 
+// Live sessions API
+export const liveApi = {
+  getIceServers: () => apiClient.get('/live/ice-servers'),
+  createSession: (dto: { courseId: string; title: string; scheduledAt?: string }) =>
+    apiClient.post('/live/sessions', dto),
+  startSession: (sessionId: string) => apiClient.patch(`/live/sessions/${sessionId}/start`),
+  endSession: (sessionId: string) => apiClient.patch(`/live/sessions/${sessionId}/end`),
+  getSession: (sessionId: string) => apiClient.get(`/live/sessions/${sessionId}`),
+  getSessionsByCourse: (courseId: string) => apiClient.get(`/live/sessions/course/${courseId}`),
+  getParticipants: (sessionId: string) => apiClient.get(`/live/sessions/${sessionId}/participants`),
+}
+
 // Videos API
 export const videosApi = {
   // Upload flow: POST /storage/upload → get url → POST /videos with storageKey: url

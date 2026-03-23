@@ -12,6 +12,12 @@ import {
 import { LiveService } from '../services/live.service';
 import { CreateSessionDto } from '../dto/create-session.dto';
 
+interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
 /**
  * LiveController — REST endpoints for live session lifecycle management.
  *
@@ -35,6 +41,33 @@ import { CreateSessionDto } from '../dto/create-session.dto';
 @Controller('live')
 export class LiveController {
   constructor(private readonly liveService: LiveService) {}
+
+  // ── ICE servers ─────────────────────────────────────────────────────────────
+
+  /**
+   * GET /live/ice-servers
+   * Returns STUN and optional TURN server configuration for WebRTC peers.
+   * TURN credentials are read from environment variables:
+   *   TURN_SERVER_URL, TURN_USERNAME, TURN_CREDENTIAL
+   */
+  @Get('ice-servers')
+  getIceServers(): { iceServers: IceServer[] } {
+    const servers: IceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ];
+
+    const turnUrl = process.env.TURN_SERVER_URL;
+    const turnUsername = process.env.TURN_USERNAME;
+    const turnCredential = process.env.TURN_CREDENTIAL;
+
+    if (turnUrl && turnUsername && turnCredential) {
+      servers.push({ urls: turnUrl, username: turnUsername, credential: turnCredential });
+    }
+
+    return { iceServers: servers };
+  }
 
   // ── Session lifecycle ───────────────────────────────────────────────────────
 
