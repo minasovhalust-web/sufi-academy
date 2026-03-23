@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Menu, X } from 'lucide-react'
+import { Menu, MessageSquare, X } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
 
 export function Navbar() {
@@ -62,6 +62,13 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-2 shrink-0">
             {isAuthenticated ? (
               <>
+                <Link
+                  href="/messages"
+                  className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                  title="Сообщения"
+                >
+                  <MessageSquare className="h-5 w-5" />
+                </Link>
                 <span className="text-sm font-medium text-gray-700">{user?.firstName}</span>
                 <button
                   onClick={handleLogout}
@@ -122,6 +129,14 @@ export function Navbar() {
                 <div className="px-3 py-2 text-sm text-gray-500">
                   Вы вошли как <span className="font-semibold text-gray-800">{user?.firstName} {user?.lastName}</span>
                 </div>
+                <Link
+                  href="/messages"
+                  className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <MessageSquare className="h-4 w-4 text-purple-500" />
+                  Сообщения
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="w-full text-left px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors text-red-600"

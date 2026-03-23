@@ -218,6 +218,15 @@ export const teacherApi = {
   createLiveSession: (dto: unknown) => apiClient.post('/live/sessions', dto),
 }
 
+// Direct Messages API
+export const directMessagesApi = {
+  getConversations: () => apiClient.get('/direct-messages'),
+  getMessages: (userId: string, params?: { limit?: number }) =>
+    apiClient.get(`/direct-messages/${userId}`, { params }),
+  sendMessage: (userId: string, content: string) =>
+    apiClient.post(`/direct-messages/${userId}`, { content }),
+}
+
 // Live sessions API
 export const liveApi = {
   getIceServers: () => apiClient.get('/live/ice-servers'),

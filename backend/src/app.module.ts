@@ -15,6 +15,7 @@ import { LiveModule } from './modules/live/live.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { DirectMessagesModule } from './modules/direct-messages/direct-messages.module';
 
 // Common
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -81,6 +82,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
     // Phase 7 feature modules
     AdminModule,
+
+    // Phase 8 feature modules
+    DirectMessagesModule,
 
     // Future modules added here as implemented:
     // MaterialsModule,

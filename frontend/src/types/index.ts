@@ -92,6 +92,28 @@ export interface Notification {
   createdAt: string
 }
 
+export interface DirectMessageUser {
+  id: string
+  firstName: string
+  lastName: string
+  avatarUrl?: string | null
+}
+
+export interface DirectMessage {
+  id: string
+  content: string
+  senderId: string
+  receiverId: string
+  createdAt: string
+  sender: DirectMessageUser
+  receiver: DirectMessageUser
+}
+
+export interface Conversation {
+  user: DirectMessageUser
+  lastMessage: DirectMessage
+}
+
 export interface LiveSession {
   id: string
   title: string

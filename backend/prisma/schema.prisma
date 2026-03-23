@@ -110,6 +110,10 @@ model User {
   // Chat relations (Phase 4)
   sentMessages ChatMessage[] @relation("SentMessages")
 
+  // Direct message relations (Phase 8)
+  sentDirectMessages     DirectMessage[] @relation("SentDirectMessages")
+  receivedDirectMessages DirectMessage[] @relation("ReceivedDirectMessages")
+
   // Live relations (Phase 5)
   hostedSessions     LiveSession[]     @relation("HostedSessions")
   liveParticipations LiveParticipant[] @relation("SessionParticipants")
@@ -362,4 +366,20 @@ model ActivityLog {
   @@index([event, createdAt])
   @@index([actorId, createdAt])
   @@map("activity_logs")
+}
+
+// ── DIRECT MESSAGE ───────────────────────────────────────────
+
+model DirectMessage {
+  id         String   @id @default(uuid())
+  content    String
+  senderId   String
+  receiverId String
+  sender     User     @relation("SentDirectMessages", fields: [senderId], references: [id])
+  receiver   User     @relation("ReceivedDirectMessages", fields: [receiverId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, senderId, createdAt])
+  @@map("direct_messages")
 }
