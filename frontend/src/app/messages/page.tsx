@@ -109,25 +109,40 @@ function NewDialogModal({
 }) {
   const router = useRouter()
   const [pickerSearch, setPickerSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [allUsers, setAllUsers] = useState<UserPickerUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(true)
 
+  // Debounce search input by 300 ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(pickerSearch), 300)
+    return () => clearTimeout(t)
+  }, [pickerSearch])
+
+  // Re-fetch when debounced search term changes
   useEffect(() => {
     setLoadingUsers(true)
     adminApi
-      .getUsers({ limit: 200 })
+      .getUsers({ search: debouncedSearch || undefined, limit: 20 })
       .then((res) => {
-        const data = res.data?.data?.data as UserPickerUser[] | undefined
-        setAllUsers((data ?? []).filter((u) => u.id !== currentUserId))
+        // /admin/users returns { data: [...], total, ... } wrapped by TransformInterceptor
+        // → res.data = { success, data: { data: [...], total, ... } }
+        // Plain /users returns { users: [...], total } wrapped the same way
+        // → res.data = { success, data: { users: [...], total } }
+        // Support both shapes:
+        const payload = res.data?.data as Record<string, unknown> | undefined
+        const users = (
+          Array.isArray(payload?.data) ? payload!.data :
+          Array.isArray(payload?.users) ? payload!.users :
+          []
+        ) as UserPickerUser[]
+        setAllUsers(users.filter((u) => u.id !== currentUserId))
       })
       .catch(() => setAllUsers([]))
       .finally(() => setLoadingUsers(false))
-  }, [currentUserId])
+  }, [currentUserId, debouncedSearch])
 
-  const filteredUsers = allUsers.filter((u) => {
-    const name = `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase()
-    return name.includes(pickerSearch.toLowerCase())
-  })
+  const filteredUsers = allUsers
 
   const handleSelect = (userId: string) => {
     onClose()
