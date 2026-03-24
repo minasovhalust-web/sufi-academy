@@ -128,7 +128,7 @@ function AttachmentContent({
     return (
       <div className="flex flex-col gap-1">
         <audio src={attach.url} controls className="max-w-[240px] h-9" />
-        <span className={`text-[11px] ${isFromMe ? 'text-indigo-200' : 'text-gray-400'}`}>
+        <span className="text-[11px] text-gray-500">
           🎙 Голосовое сообщение
         </span>
       </div>
@@ -153,7 +153,7 @@ function AttachmentContent({
       rel="noopener noreferrer"
       className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium max-w-[240px] transition-colors ${
         isFromMe
-          ? 'border-indigo-400/40 bg-indigo-500/20 text-indigo-100 hover:bg-indigo-500/30'
+          ? 'border-indigo-200 bg-indigo-50 text-gray-900 hover:bg-indigo-100'
           : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
       }`}
     >
@@ -185,7 +185,7 @@ function MessageBubble({
         <span className="text-[10px] text-gray-400 mb-0.5 shrink-0">{time}</span>
         <div
           className={`max-w-[72%] ${
-            isMedia ? '' : 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md'
+            isMedia ? '' : 'bg-indigo-100 text-gray-900 shadow-sm'
           } rounded-2xl rounded-br-sm ${isMedia ? '' : 'px-4 py-2.5'}`}
         >
           {attach ? (
@@ -584,7 +584,7 @@ export default function ChatPage({ params }: { params: { userId: string } }) {
                 <button
                   onClick={handleSend}
                   disabled={isBusy}
-                  className="h-10 w-10 flex items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md hover:opacity-90 transition-opacity shrink-0 disabled:opacity-50"
+                  className="h-10 w-10 flex items-center justify-center rounded-full bg-indigo-500 text-white shadow-sm hover:bg-indigo-600 transition-colors shrink-0 disabled:opacity-50"
                   title="Отправить"
                 >
                   {isSending ? (
