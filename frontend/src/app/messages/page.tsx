@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import { useAuthStore } from '@/store/auth.store'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -44,11 +44,39 @@ function Avatar({
 
   return (
     <div
-      className={`${sizeClass} rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-semibold shrink-0`}
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-semibold shrink-0`}
     >
       {initials}
     </div>
   )
+}
+
+// ── Smart time label ──────────────────────────────────────────────────────────
+
+function smartTime(iso: string) {
+  const d = new Date(iso)
+  if (isToday(d)) return format(d, 'HH:mm', { locale: ru })
+  if (isYesterday(d)) return 'вчера'
+  return format(d, 'd MMM', { locale: ru })
+}
+
+// ── Attachment preview text ───────────────────────────────────────────────────
+
+function previewText(content: string, isFromMe: boolean) {
+  const prefix = isFromMe ? 'Вы: ' : ''
+  if (content.startsWith('{"__a":1')) {
+    try {
+      const p = JSON.parse(content) as { kind: string }
+      if (p.kind === 'image') return prefix + '📷 Изображение'
+      if (p.kind === 'audio') return prefix + '🎙 Голосовое сообщение'
+      if (p.kind === 'video') return prefix + '🎬 Видео'
+      return prefix + '📎 Файл'
+    } catch {
+      return prefix + '📎 Вложение'
+    }
+  }
+  const full = prefix + content
+  return full.length > 60 ? full.slice(0, 57) + '…' : full
 }
 
 // ── Conversation Item ─────────────────────────────────────────────────────────
@@ -62,28 +90,24 @@ function ConversationItem({
 }) {
   const { user, lastMessage } = conv
   const isFromMe = lastMessage.senderId === currentUserId
-  const preview = isFromMe ? `Вы: ${lastMessage.content}` : lastMessage.content
-  const truncated = preview.length > 60 ? preview.slice(0, 57) + '…' : preview
-
-  const timeAgo = formatDistanceToNow(new Date(lastMessage.createdAt), {
-    addSuffix: true,
-    locale: ru,
-  })
+  const preview = previewText(lastMessage.content, isFromMe)
 
   return (
     <Link
       href={`/messages/${user.id}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0"
+      className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
     >
       <Avatar name={`${user.firstName} ${user.lastName}`} avatarUrl={user.avatarUrl} />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="font-medium text-sm text-gray-900 truncate">
+          <span className="font-semibold text-sm text-gray-900 truncate">
             {user.firstName} {user.lastName}
           </span>
-          <span className="text-xs text-gray-400 shrink-0">{timeAgo}</span>
+          <span className="text-[11px] text-gray-400 shrink-0">
+            {smartTime(lastMessage.createdAt)}
+          </span>
         </div>
-        <p className="text-xs text-gray-500 truncate mt-0.5">{truncated}</p>
+        <p className="text-xs text-gray-500 truncate mt-0.5 leading-relaxed">{preview}</p>
       </div>
     </Link>
   )
@@ -235,18 +259,20 @@ export default function MessagesPage() {
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-2xl mx-auto py-8 px-4">
+      <div className="min-h-screen bg-[#f0f2f5]">
+        <div className="max-w-2xl mx-auto py-6 px-4">
 
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 mb-6">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="h-6 w-6 text-purple-600" />
-              <h1 className="text-2xl font-bold">Сообщения</h1>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                <MessageSquare className="h-4.5 w-4.5 text-white" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">Сообщения</h1>
             </div>
             <button
               onClick={() => setNewDialogOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-sm font-medium hover:opacity-90 transition-opacity shadow-sm shrink-0"
             >
               <Plus className="h-4 w-4" />
               Новый диалог
@@ -254,14 +280,14 @@ export default function MessagesPage() {
           </div>
 
           {/* Search */}
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <div className="relative mb-3">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <input
               type="text"
               placeholder="Поиск по диалогам…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-300 transition"
+              className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-2xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 transition shadow-sm"
             />
           </div>
 
@@ -269,25 +295,30 @@ export default function MessagesPage() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             {isLoading ? (
               <div className="divide-y divide-gray-100">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3">
-                    <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3.5">
+                    <Skeleton className="h-11 w-11 rounded-full shrink-0" />
                     <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-36" />
-                      <Skeleton className="h-3 w-52" />
+                      <div className="flex justify-between">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-10" />
+                      </div>
+                      <Skeleton className="h-3 w-48" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : filtered.length === 0 ? (
               <div className="py-16 text-center text-gray-400">
-                <MessageSquare className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+                <div className="h-14 w-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                  <MessageSquare className="h-7 w-7 text-gray-300" />
+                </div>
                 {search ? (
-                  <p className="text-sm">Диалогов не найдено</p>
+                  <p className="text-sm text-gray-500">Диалогов не найдено</p>
                 ) : (
                   <>
-                    <p className="text-sm font-medium text-gray-500 mb-1">Нет диалогов</p>
-                    <p className="text-xs">Нажмите «Новый диалог», чтобы начать переписку</p>
+                    <p className="text-sm font-semibold text-gray-600 mb-1">Нет диалогов</p>
+                    <p className="text-xs text-gray-400">Нажмите «Новый диалог», чтобы начать переписку</p>
                   </>
                 )}
               </div>
