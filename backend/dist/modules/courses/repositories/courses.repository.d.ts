@@ -12,4 +12,5 @@ export declare class CoursesRepository {
     findBySlug(slug: string): Promise<any | null>;
     update(id: string, data: any): Promise<any>;
     delete(id: string): Promise<void>;
+    updateImageUrl(id: string, imageUrl: string): Promise<void>;
 }

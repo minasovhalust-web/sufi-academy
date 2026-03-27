@@ -15,5 +15,6 @@ export declare class CoursesService {
     findMy(instructorId: string): Promise<any[]>;
     findById(id: string): Promise<any>;
     update(id: string, dto: UpdateCourseDto, requesterId: string, requesterRole: Role): Promise<any>;
+    updateImageUrl(id: string, imageUrl: string, requesterId: string, requesterRole: Role): Promise<void>;
     remove(id: string, requesterId: string, requesterRole: Role): Promise<void>;
 }

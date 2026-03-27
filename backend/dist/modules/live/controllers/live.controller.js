@@ -20,6 +20,20 @@ let LiveController = class LiveController {
     constructor(liveService) {
         this.liveService = liveService;
     }
+    getIceServers() {
+        const servers = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+        ];
+        const turnUrl = process.env.TURN_SERVER_URL;
+        const turnUsername = process.env.TURN_USERNAME;
+        const turnCredential = process.env.TURN_CREDENTIAL;
+        if (turnUrl && turnUsername && turnCredential) {
+            servers.push({ urls: turnUrl, username: turnUsername, credential: turnCredential });
+        }
+        return { iceServers: servers };
+    }
     create(dto, req) {
         return this.liveService.createSession(dto, req.user.sub, req.user.role);
     }
@@ -40,6 +54,12 @@ let LiveController = class LiveController {
     }
 };
 exports.LiveController = LiveController;
+__decorate([
+    (0, common_1.Get)('ice-servers'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Object)
+], LiveController.prototype, "getIceServers", null);
 __decorate([
     (0, common_1.Post)('sessions'),
     __param(0, (0, common_1.Body)()),

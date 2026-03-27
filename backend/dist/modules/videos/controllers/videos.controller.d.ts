@@ -8,39 +8,39 @@ export declare class VideosController {
     requestUploadUrl(dto: RequestUploadUrlDto, req: any): Promise<import("../../storage/storage.interface").PresignedUploadResult>;
     create(dto: CreateVideoDto, req: any): Promise<{
         id: string;
-        title: string;
-        description: string | null;
-        storageKey: string;
-        mimeType: string;
-        duration: number | null;
-        status: import(".prisma/client").$Enums.VideoStatus;
-        lessonId: string;
         createdAt: Date;
         updatedAt: Date;
+        title: string;
+        description: string | null;
+        status: import(".prisma/client").$Enums.VideoStatus;
+        lessonId: string;
+        duration: number | null;
+        storageKey: string;
+        mimeType: string;
     }>;
     findByLesson(lessonId: string): Promise<{
         id: string;
-        title: string;
-        description: string | null;
-        storageKey: string;
-        mimeType: string;
-        duration: number | null;
-        status: import(".prisma/client").$Enums.VideoStatus;
-        lessonId: string;
         createdAt: Date;
         updatedAt: Date;
+        title: string;
+        description: string | null;
+        status: import(".prisma/client").$Enums.VideoStatus;
+        lessonId: string;
+        duration: number | null;
+        storageKey: string;
+        mimeType: string;
     }[]>;
     findOne(id: string): Promise<{
         id: string;
-        title: string;
-        description: string | null;
-        storageKey: string;
-        mimeType: string;
-        duration: number | null;
-        status: import(".prisma/client").$Enums.VideoStatus;
-        lessonId: string;
         createdAt: Date;
         updatedAt: Date;
+        title: string;
+        description: string | null;
+        status: import(".prisma/client").$Enums.VideoStatus;
+        lessonId: string;
+        duration: number | null;
+        storageKey: string;
+        mimeType: string;
     }>;
     getStreamUrl(id: string): Promise<{
         streamUrl: string;
@@ -48,15 +48,15 @@ export declare class VideosController {
     }>;
     update(id: string, dto: UpdateVideoDto, req: any): Promise<{
         id: string;
-        title: string;
-        description: string | null;
-        storageKey: string;
-        mimeType: string;
-        duration: number | null;
-        status: import(".prisma/client").$Enums.VideoStatus;
-        lessonId: string;
         createdAt: Date;
         updatedAt: Date;
+        title: string;
+        description: string | null;
+        status: import(".prisma/client").$Enums.VideoStatus;
+        lessonId: string;
+        duration: number | null;
+        storageKey: string;
+        mimeType: string;
     }>;
     remove(id: string, req: any): Promise<void>;
 }

@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CoursesRepository = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../prisma/prisma.service");
+const client_1 = require("@prisma/client");
 let CoursesRepository = class CoursesRepository {
     constructor(prisma) {
         this.prisma = prisma;
@@ -60,6 +61,9 @@ let CoursesRepository = class CoursesRepository {
     }
     async delete(id) {
         await this.prisma.course.delete({ where: { id } });
+    }
+    async updateImageUrl(id, imageUrl) {
+        await this.prisma.$executeRaw(client_1.Prisma.sql `UPDATE "courses" SET "imageUrl" = ${imageUrl}, "updatedAt" = NOW() WHERE "id" = ${id}`);
     }
 };
 exports.CoursesRepository = CoursesRepository;

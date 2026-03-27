@@ -13,12 +13,12 @@ export declare class NotificationsRepository {
     create(input: CreateNotificationInput): Promise<{
         id: string;
         createdAt: Date;
-        userId: string;
         title: string;
-        type: import(".prisma/client").$Enums.NotificationType;
+        userId: string;
         metadata: Prisma.JsonValue | null;
-        body: string;
+        type: import(".prisma/client").$Enums.NotificationType;
         isRead: boolean;
+        body: string;
         readAt: Date | null;
     }>;
     findByUser(userId: string, options: {
@@ -28,35 +28,35 @@ export declare class NotificationsRepository {
     }): Promise<{
         id: string;
         createdAt: Date;
-        userId: string;
         title: string;
-        type: import(".prisma/client").$Enums.NotificationType;
+        userId: string;
         metadata: Prisma.JsonValue | null;
-        body: string;
+        type: import(".prisma/client").$Enums.NotificationType;
         isRead: boolean;
+        body: string;
         readAt: Date | null;
     }[]>;
     countByUser(userId: string, isRead?: boolean): Promise<number>;
     findById(id: string): Promise<{
         id: string;
         createdAt: Date;
-        userId: string;
         title: string;
-        type: import(".prisma/client").$Enums.NotificationType;
+        userId: string;
         metadata: Prisma.JsonValue | null;
-        body: string;
+        type: import(".prisma/client").$Enums.NotificationType;
         isRead: boolean;
+        body: string;
         readAt: Date | null;
     }>;
     markOneRead(id: string): Promise<{
         id: string;
         createdAt: Date;
-        userId: string;
         title: string;
-        type: import(".prisma/client").$Enums.NotificationType;
+        userId: string;
         metadata: Prisma.JsonValue | null;
-        body: string;
+        type: import(".prisma/client").$Enums.NotificationType;
         isRead: boolean;
+        body: string;
         readAt: Date | null;
     }>;
     markAllRead(userId: string): Promise<Prisma.BatchPayload>;

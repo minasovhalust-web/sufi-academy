@@ -18,10 +18,10 @@ export declare class AnalyticsRepository {
         event: import(".prisma/client").$Enums.ActivityEventType;
         id: string;
         createdAt: Date;
-        metadata: Prisma.JsonValue | null;
         actorId: string | null;
         subjectId: string | null;
         subjectType: string | null;
+        metadata: Prisma.JsonValue | null;
     }>;
     countByEventType(range: DateRange): Promise<{
         event: import(".prisma/client").$Enums.ActivityEventType;

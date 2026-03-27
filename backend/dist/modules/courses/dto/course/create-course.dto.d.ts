@@ -10,4 +10,5 @@ export declare class CreateCourseDto {
     status?: CourseStatus;
     price?: number;
     currency?: string;
+    imageUrl?: string;
 }

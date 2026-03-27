@@ -8,7 +8,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CoursesModule = void 0;
 const common_1 = require("@nestjs/common");
+const platform_express_1 = require("@nestjs/platform-express");
+const multer_1 = require("multer");
 const prisma_module_1 = require("../../prisma/prisma.module");
+const storage_module_1 = require("../storage/storage.module");
 const courses_controller_1 = require("./controllers/courses.controller");
 const course_modules_controller_1 = require("./controllers/course-modules.controller");
 const lessons_controller_1 = require("./controllers/lessons.controller");
@@ -29,7 +32,11 @@ let CoursesModule = class CoursesModule {
 exports.CoursesModule = CoursesModule;
 exports.CoursesModule = CoursesModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule],
+        imports: [
+            prisma_module_1.PrismaModule,
+            storage_module_1.StorageModule,
+            platform_express_1.MulterModule.register({ storage: (0, multer_1.memoryStorage)() }),
+        ],
         controllers: [
             courses_controller_1.CoursesController,
             course_modules_controller_1.CourseModulesController,

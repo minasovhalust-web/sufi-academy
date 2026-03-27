@@ -20,8 +20,8 @@ export declare class LiveService {
         title: string;
         status: import(".prisma/client").$Enums.SessionStatus;
         courseId: string;
-        startedAt: Date | null;
         endedAt: Date | null;
+        startedAt: Date | null;
         hostId: string;
     }[]>;
     startSession(sessionId: string, requesterId: string, requesterRole: Role): Promise<LiveSessionWithRelations>;

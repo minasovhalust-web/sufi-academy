@@ -23,104 +23,104 @@ export declare class AdminRepository {
     private readonly prisma;
     constructor(prisma: PrismaService);
     findUsers(filters: UserFilters): Promise<{
+        _count: {
+            enrollments: number;
+            taughtCourses: number;
+        };
         id: string;
         email: string;
         firstName: string;
         lastName: string;
         role: import(".prisma/client").$Enums.Role;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         bio: string;
         avatarUrl: string;
         specialization: string;
-        _count: {
-            taughtCourses: number;
-            enrollments: number;
-        };
+        createdAt: Date;
+        updatedAt: Date;
     }[]>;
     countUsers(filters: Pick<UserFilters, 'role' | 'isActive' | 'search'>): Promise<number>;
     findUserById(id: string): Promise<{
+        _count: {
+            enrollments: number;
+            taughtCourses: number;
+        };
         id: string;
         email: string;
         firstName: string;
         lastName: string;
         role: import(".prisma/client").$Enums.Role;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         bio: string;
         avatarUrl: string;
         specialization: string;
-        taughtCourses: {
-            id: string;
-            createdAt: Date;
-            _count: {
-                enrollments: number;
-            };
-            title: string;
-            slug: string;
-            status: import(".prisma/client").$Enums.CourseStatus;
-        }[];
+        createdAt: Date;
+        updatedAt: Date;
         enrollments: {
+            id: string;
+            status: import(".prisma/client").$Enums.EnrollmentStatus;
+            progress: number;
+            enrolledAt: Date;
             course: {
                 id: string;
                 title: string;
                 slug: string;
                 status: import(".prisma/client").$Enums.CourseStatus;
             };
-            id: string;
-            status: import(".prisma/client").$Enums.EnrollmentStatus;
-            progress: number;
-            enrolledAt: Date;
         }[];
-        _count: {
-            taughtCourses: number;
-            enrollments: number;
-        };
+        taughtCourses: {
+            _count: {
+                enrollments: number;
+            };
+            id: string;
+            createdAt: Date;
+            title: string;
+            slug: string;
+            status: import(".prisma/client").$Enums.CourseStatus;
+        }[];
     }>;
     updateUserRole(id: string, role: Role): Promise<{
+        _count: {
+            enrollments: number;
+            taughtCourses: number;
+        };
         id: string;
         email: string;
         firstName: string;
         lastName: string;
         role: import(".prisma/client").$Enums.Role;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         bio: string;
         avatarUrl: string;
         specialization: string;
-        _count: {
-            taughtCourses: number;
-            enrollments: number;
-        };
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     updateUserStatus(id: string, isActive: boolean): Promise<{
+        _count: {
+            enrollments: number;
+            taughtCourses: number;
+        };
         id: string;
         email: string;
         firstName: string;
         lastName: string;
         role: import(".prisma/client").$Enums.Role;
         isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
         bio: string;
         avatarUrl: string;
         specialization: string;
-        _count: {
-            taughtCourses: number;
-            enrollments: number;
-        };
-    }>;
-    findCourses(filters: CourseFilters): Promise<{
-        id: string;
         createdAt: Date;
         updatedAt: Date;
+    }>;
+    findCourses(filters: CourseFilters): Promise<{
         _count: {
             enrollments: number;
             modules: number;
         };
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string;
         description: string;
         slug: string;
@@ -135,13 +135,13 @@ export declare class AdminRepository {
     }[]>;
     countCourses(filters: Pick<CourseFilters, 'status' | 'teacherId' | 'search'>): Promise<number>;
     findCourseById(id: string): Promise<{
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
         _count: {
             enrollments: number;
             modules: number;
         };
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string;
         description: string;
         slug: string;
@@ -155,13 +155,13 @@ export declare class AdminRepository {
         };
     }>;
     updateCourseStatus(id: string, status: CourseStatus): Promise<{
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
         _count: {
             enrollments: number;
             modules: number;
         };
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
         title: string;
         description: string;
         slug: string;
@@ -191,10 +191,10 @@ export declare class AdminRepository {
     } & {
         id: string;
         updatedAt: Date;
-        userId: string;
         status: import(".prisma/client").$Enums.EnrollmentStatus;
-        courseId: string;
         progress: number;
+        userId: string;
+        courseId: string;
         enrolledAt: Date;
     })[]>;
     countEnrollments(filters: Pick<EnrollmentFilters, 'status'>): Promise<number>;
@@ -214,10 +214,10 @@ export declare class AdminRepository {
     } & {
         id: string;
         updatedAt: Date;
-        userId: string;
         status: import(".prisma/client").$Enums.EnrollmentStatus;
-        courseId: string;
         progress: number;
+        userId: string;
+        courseId: string;
         enrolledAt: Date;
     }>;
     updateEnrollmentStatus(id: string, status: EnrollmentStatus): Promise<{
@@ -235,10 +235,10 @@ export declare class AdminRepository {
     } & {
         id: string;
         updatedAt: Date;
-        userId: string;
         status: import(".prisma/client").$Enums.EnrollmentStatus;
-        courseId: string;
         progress: number;
+        userId: string;
+        courseId: string;
         enrolledAt: Date;
     }>;
     getDashboardStats(): Promise<{

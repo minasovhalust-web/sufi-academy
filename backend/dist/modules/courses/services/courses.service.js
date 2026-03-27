@@ -62,6 +62,14 @@ let CoursesService = class CoursesService {
         }
         return this.coursesRepository.update(id, dto);
     }
+    async updateImageUrl(id, imageUrl, requesterId, requesterRole) {
+        const course = await this.findById(id);
+        if (course.instructorId !== requesterId &&
+            requesterRole !== client_1.Role.ADMIN) {
+            throw new common_1.ForbiddenException('Only the course instructor can update this course image');
+        }
+        await this.coursesRepository.updateImageUrl(id, imageUrl);
+    }
     async remove(id, requesterId, requesterRole) {
         const course = await this.findById(id);
         if (course.instructorId !== requesterId &&
