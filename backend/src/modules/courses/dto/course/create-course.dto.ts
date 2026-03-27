@@ -32,4 +32,8 @@ export class CreateCourseDto {
   @IsString()
   @IsOptional()
   currency?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
 }

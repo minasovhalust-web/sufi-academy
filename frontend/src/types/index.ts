@@ -21,6 +21,7 @@ export interface Course {
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
   price?: number
   currency?: string
+  imageUrl?: string | null
   instructorId: string
   instructor?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'avatarUrl'>
   _count?: { enrollments: number; modules: number }

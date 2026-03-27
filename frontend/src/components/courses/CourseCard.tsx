@@ -19,14 +19,22 @@ export function CourseCard({ course }: CourseCardProps) {
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
-      {/* Decorative header */}
-      <div className={`bg-gradient-to-br ${gradients[variant]} h-32 relative overflow-hidden`}>
-        <svg className="absolute opacity-10 w-full h-full" viewBox="0 0 200 200">
-          <pattern id="pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M20,0 L40,20 L20,40 L0,20 Z" fill="currentColor" />
-          </pattern>
-          <rect width="200" height="200" fill="url(#pattern)" />
-        </svg>
+      {/* Cover image / decorative header */}
+      <div className={`bg-gradient-to-br ${gradients[variant]} h-40 relative overflow-hidden`}>
+        {course.imageUrl ? (
+          <img
+            src={course.imageUrl}
+            alt={course.title}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <svg className="absolute opacity-10 w-full h-full" viewBox="0 0 200 200">
+            <pattern id="pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M20,0 L40,20 L20,40 L0,20 Z" fill="currentColor" />
+            </pattern>
+            <rect width="200" height="200" fill="url(#pattern)" />
+          </svg>
+        )}
       </div>
 
       <CardHeader className="flex-1">

@@ -151,6 +151,7 @@ model Course {
   status       CourseStatus @default(DRAFT)
   price        Float?
   currency     String?      @default("RUB")
+  imageUrl     String?      // Phase 9: course cover image
   instructor   User         @relation("InstructorCourses", fields: [instructorId], references: [id])
   instructorId String
   modules      CourseModule[]

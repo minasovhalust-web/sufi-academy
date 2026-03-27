@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { MulterModule } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { StorageModule } from '../storage/storage.module';
 
 // Controllers
 import { CoursesController } from './controllers/courses.controller';
@@ -37,7 +40,11 @@ import { EnrollmentsRepository } from './repositories/enrollments.repository';
  * CoursesService is exported for potential cross-module use (e.g. AnalyticsModule).
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [
+    PrismaModule,
+    StorageModule,
+    MulterModule.register({ storage: memoryStorage() }),
+  ],
   controllers: [
     CoursesController,
     CourseModulesController,

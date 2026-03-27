@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -54,6 +55,7 @@ import {
   Clock,
   Play,
   Radio,
+  ImageIcon,
 } from 'lucide-react'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -692,6 +694,7 @@ export default function TeacherCourseManagePage({
 }) {
   const courseId = params.id
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   const { data: courseData, isLoading: courseLoading } = useCourse(courseId)
   const { data: modulesData, isLoading: modulesLoading } = useCourseModules(courseId)
@@ -704,6 +707,30 @@ export default function TeacherCourseManagePage({
   const [priceValue, setPriceValue] = useState('')
   const [currencyValue, setCurrencyValue] = useState('RUB')
   const [creatingLiveSession, setCreatingLiveSession] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const coverInputRef = useRef<HTMLInputElement>(null)
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Выберите файл изображения')
+      return
+    }
+    setUploadingCover(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      await apiClient.post(`/courses/${courseId}/image`, form)
+      toast.success('Обложка обновлена')
+      queryClient.invalidateQueries({ queryKey: ['courses', courseId] })
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Ошибка загрузки обложки')
+    } finally {
+      setUploadingCover(false)
+      if (coverInputRef.current) coverInputRef.current.value = ''
+    }
+  }
 
   const handleCreateLiveSession = async () => {
     setCreatingLiveSession(true)
@@ -846,6 +873,56 @@ export default function TeacherCourseManagePage({
                     </Button>
                   </div>
                 )}
+              </div>
+
+              {/* Cover image */}
+              <div className="mt-5 pt-5 border-t border-gray-100">
+                <div className="flex items-center gap-4">
+                  {course.imageUrl ? (
+                    <div className="relative group w-32 h-20 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                      <img
+                        src={course.imageUrl}
+                        alt="Обложка курса"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => coverInputRef.current?.click()}
+                          className="text-white text-xs font-medium"
+                        >
+                          Изменить
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-32 h-20 rounded-lg bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center shrink-0">
+                      <ImageIcon className="h-6 w-6 text-gray-400" />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Обложка курса</p>
+                    <p className="text-xs text-gray-400 mb-2">
+                      {course.imageUrl ? 'Нажмите на изображение или кнопку ниже, чтобы изменить' : 'Загрузите изображение-обложку для курса'}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={uploadingCover}
+                      onClick={() => coverInputRef.current?.click()}
+                    >
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                      {uploadingCover ? 'Загрузка...' : course.imageUrl ? 'Заменить обложку' : 'Загрузить обложку'}
+                    </Button>
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleCoverUpload}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
