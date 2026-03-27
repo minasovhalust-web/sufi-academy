@@ -114,9 +114,9 @@ export class CoursesController {
       60 * 60 * 24 * 365,
     );
 
-    await this.coursesService.update(
+    await this.coursesService.updateImageUrl(
       id,
-      { imageUrl },
+      imageUrl,
       req.user.sub,
       req.user.role,
     );

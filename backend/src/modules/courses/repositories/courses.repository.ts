@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { Course, CourseStatus } from '@prisma/client';
 
 @Injectable()
@@ -58,5 +59,16 @@ export class CoursesRepository {
 
   async delete(id: string): Promise<void> {
     await (this.prisma as any).course.delete({ where: { id } });
+  }
+
+  /**
+   * Update the course cover image URL using a raw SQL query.
+   * This bypasses the Prisma generated client so it works even when
+   * `prisma generate` hasn't been re-run after adding the imageUrl column.
+   */
+  async updateImageUrl(id: string, imageUrl: string): Promise<void> {
+    await this.prisma.$executeRaw(
+      Prisma.sql`UPDATE "courses" SET "imageUrl" = ${imageUrl}, "updatedAt" = NOW() WHERE "id" = ${id}`,
+    );
   }
 }
