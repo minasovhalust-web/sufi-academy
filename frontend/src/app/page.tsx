@@ -24,6 +24,7 @@ export default function HomePage() {
   const nextPhoto = () => setPhotoIndex((i) => (i + 1) % TEACHER_PHOTOS.length)
   const { data: coursesData, isLoading: coursesLoading } = useCourses({ status: 'PUBLISHED', limit: 6 })
   const isAdmin = useAuthStore((state) => state.isAdmin())
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   // Only fetch admin dashboard when the current user is actually an admin.
   // Calling it unconditionally would trigger a 401/403 for every guest visitor.
   const { data: statsData } = useAdminDashboard()
@@ -40,11 +41,8 @@ export default function HomePage() {
             {/* Text */}
             <div className="space-y-6">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                Откройте мир суфийской философии
+                Академия Суфийской Философии и практики
               </h1>
-              <p className="text-lg text-[var(--color-text-secondary)]">
-                Глубокие знания, духовный рост и мудрость веков в современном формате
-              </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Button size="lg" asChild>
                   <Link href="/courses">Начать обучение</Link>
@@ -236,20 +234,22 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)]">
-        <div className="container-base text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-            Готовы начать свой путь?
-          </h2>
-          <p className="text-white/90 max-w-2xl mx-auto mb-8">
-            Присоединитесь к нашей академии и откройте для себя глубины суфийской философии
-          </p>
-          <Button size="lg" variant="secondary" asChild>
-            <Link href="/auth/register">Зарегистрироваться сейчас</Link>
-          </Button>
-        </div>
-      </section>
+      {/* CTA Section — shown only to guests */}
+      {!isAuthenticated && (
+        <section className="py-20 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)]">
+          <div className="container-base text-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+              Готовы начать свой путь?
+            </h2>
+            <p className="text-white/90 max-w-2xl mx-auto mb-8">
+              Присоединитесь к нашей академии и откройте для себя глубины суфийской философии
+            </p>
+            <Button size="lg" variant="secondary" asChild>
+              <Link href="/auth/register">Зарегистрироваться сейчас</Link>
+            </Button>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
