@@ -423,7 +423,7 @@ export default function ChatPage({ params }: { params: { userId: string } }) {
         onChange={handleFileChange}
       />
 
-      <div className="h-screen bg-[#f0f2f5] flex flex-col overflow-hidden">
+      <div className="bg-[#f0f2f5] flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 4rem)' }}>
 
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="shrink-0 bg-white border-b border-gray-200 shadow-sm px-4 py-3 flex items-center gap-3">

@@ -950,7 +950,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
 
   // ── ACTIVE / COMPLETED ─────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="bg-gray-50 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 4rem)' }}>
 
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-white border-b px-3 md:px-6 py-3 flex items-center gap-2 md:gap-4 shrink-0">
@@ -992,7 +992,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
       </header>
 
       {/* Split layout */}
-      <div className="relative flex flex-1 overflow-hidden" style={{ height: 'calc(100vh - 57px)' }}>
+      <div className="relative flex flex-1 overflow-hidden">
 
         {/* Mobile backdrop — tap outside to close */}
         {sidebarOpen && (
