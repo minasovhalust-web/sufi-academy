@@ -15,7 +15,7 @@ export class CoursesRepository {
     status?: CourseStatus;
     instructorId?: string;
   }): Promise<any[]> {
-    return (this.prisma as any).course.findMany({
+    const courses = await (this.prisma as any).course.findMany({
       where: filters,
       include: {
         instructor: {
@@ -27,10 +27,21 @@ export class CoursesRepository {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    if (courses.length === 0) return courses;
+
+    // imageUrl lives in the DB but the generated Prisma client may not know about
+    // it yet (prisma generate not re-run). Fetch it via raw SQL and merge.
+    const ids: string[] = courses.map((c: any) => c.id);
+    const rows = await this.prisma.$queryRaw<{ id: string; imageUrl: string | null }[]>(
+      Prisma.sql`SELECT "id", "imageUrl" FROM "courses" WHERE "id" IN (${Prisma.join(ids)})`,
+    );
+    const urlMap = new Map(rows.map((r) => [r.id, r.imageUrl]));
+    return courses.map((c: any) => ({ ...c, imageUrl: urlMap.get(c.id) ?? null }));
   }
 
   async findById(id: string): Promise<any | null> {
-    return (this.prisma as any).course.findUnique({
+    const course = await (this.prisma as any).course.findUnique({
       where: { id },
       include: {
         instructor: {
@@ -47,6 +58,15 @@ export class CoursesRepository {
         },
       },
     });
+
+    if (!course) return null;
+
+    // Merge imageUrl from raw SQL (same reason as findAll above).
+    const rows = await this.prisma.$queryRaw<{ imageUrl: string | null }[]>(
+      Prisma.sql`SELECT "imageUrl" FROM "courses" WHERE "id" = ${id}`,
+    );
+    course.imageUrl = rows[0]?.imageUrl ?? null;
+    return course;
   }
 
   async findBySlug(slug: string): Promise<any | null> {

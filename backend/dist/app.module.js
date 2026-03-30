@@ -23,6 +23,7 @@ const notifications_module_1 = require("./modules/notifications/notifications.mo
 const analytics_module_1 = require("./modules/analytics/analytics.module");
 const admin_module_1 = require("./modules/admin/admin.module");
 const direct_messages_module_1 = require("./modules/direct-messages/direct-messages.module");
+const schedule_module_1 = require("./modules/schedule/schedule.module");
 const jwt_auth_guard_1 = require("./common/guards/jwt-auth.guard");
 const roles_guard_1 = require("./common/guards/roles.guard");
 const transform_interceptor_1 = require("./common/interceptors/transform.interceptor");
@@ -54,6 +55,7 @@ exports.AppModule = AppModule = __decorate([
             analytics_module_1.AnalyticsModule,
             admin_module_1.AdminModule,
             direct_messages_module_1.DirectMessagesModule,
+            schedule_module_1.ScheduleModule,
         ],
         providers: [
             {

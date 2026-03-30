@@ -21,7 +21,7 @@ let CoursesRepository = class CoursesRepository {
         return this.prisma.course.create({ data });
     }
     async findAll(filters) {
-        return this.prisma.course.findMany({
+        const courses = await this.prisma.course.findMany({
             where: filters,
             include: {
                 instructor: {
@@ -33,9 +33,15 @@ let CoursesRepository = class CoursesRepository {
             },
             orderBy: { createdAt: 'desc' },
         });
+        if (courses.length === 0)
+            return courses;
+        const ids = courses.map((c) => c.id);
+        const rows = await this.prisma.$queryRaw(client_1.Prisma.sql `SELECT "id", "imageUrl" FROM "courses" WHERE "id" IN (${client_1.Prisma.join(ids)})`);
+        const urlMap = new Map(rows.map((r) => [r.id, r.imageUrl]));
+        return courses.map((c) => ({ ...c, imageUrl: urlMap.get(c.id) ?? null }));
     }
     async findById(id) {
-        return this.prisma.course.findUnique({
+        const course = await this.prisma.course.findUnique({
             where: { id },
             include: {
                 instructor: {
@@ -52,6 +58,11 @@ let CoursesRepository = class CoursesRepository {
                 },
             },
         });
+        if (!course)
+            return null;
+        const rows = await this.prisma.$queryRaw(client_1.Prisma.sql `SELECT "imageUrl" FROM "courses" WHERE "id" = ${id}`);
+        course.imageUrl = rows[0]?.imageUrl ?? null;
+        return course;
     }
     async findBySlug(slug) {
         return this.prisma.course.findUnique({ where: { slug } });

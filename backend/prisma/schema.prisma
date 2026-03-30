@@ -144,24 +144,41 @@ model RefreshToken {
 // ── COURSE ─────────────────────────────────────────────────
 
 model Course {
-  id           String       @id @default(uuid())
-  title        String
-  description  String?
-  slug         String       @unique
-  status       CourseStatus @default(DRAFT)
-  price        Float?
-  currency     String?      @default("RUB")
-  imageUrl     String?      // Phase 9: course cover image
-  instructor   User         @relation("InstructorCourses", fields: [instructorId], references: [id])
-  instructorId String
-  modules      CourseModule[]
-  enrollments  Enrollment[]
-  chatRoom     ChatRoom?
-  liveSessions LiveSession[] // Phase 5
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id                String             @id @default(uuid())
+  title             String
+  description       String?
+  slug              String             @unique
+  status            CourseStatus       @default(DRAFT)
+  price             Float?
+  currency          String?            @default("RUB")
+  imageUrl          String?            // Phase 9: course cover image
+  instructor        User               @relation("InstructorCourses", fields: [instructorId], references: [id])
+  instructorId      String
+  modules           CourseModule[]
+  enrollments       Enrollment[]
+  chatRoom          ChatRoom?
+  liveSessions      LiveSession[]      // Phase 5
+  scheduledLessons  ScheduledLesson[]  // Phase 10
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@map("courses")
+}
+
+// ── SCHEDULED LESSON ─────────────────────────────────────────
+
+model ScheduledLesson {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  scheduledAt DateTime
+  courseId    String
+  lessonId    String?
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([courseId, scheduledAt])
+  @@map("scheduled_lessons")
 }
 
 // ── COURSE MODULE ──────────────────────────────────────────
@@ -283,13 +300,15 @@ model ChatMessage {
 // ── LIVE SESSION ───────────────────────────────────────────
 
 model LiveSession {
-  id        String        @id @default(uuid())
-  title     String
-  status    SessionStatus @default(SCHEDULED)
+  id          String        @id @default(uuid())
+  title       String
+  description String?       // Phase 10: optional session description
+  status      SessionStatus @default(SCHEDULED)
 
   // Timestamps set when status transitions
-  startedAt DateTime?
-  endedAt   DateTime?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  scheduledAt DateTime?     // Phase 10: planned start time (before going LIVE)
 
   // The user who created and owns this session
   host     User   @relation("HostedSessions", fields: [hostId], references: [id])

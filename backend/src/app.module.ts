@@ -16,6 +16,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { DirectMessagesModule } from './modules/direct-messages/direct-messages.module';
+import { ScheduleModule } from './modules/schedule/schedule.module';
 
 // Common
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -85,6 +86,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
     // Phase 8 feature modules
     DirectMessagesModule,
+
+    // Phase 10 feature modules
+    ScheduleModule,
 
     // Future modules added here as implemented:
     // MaterialsModule,

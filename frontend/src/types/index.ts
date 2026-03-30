@@ -115,6 +115,17 @@ export interface Conversation {
   lastMessage: DirectMessage
 }
 
+export interface ScheduledLesson {
+  id: string
+  title: string
+  description?: string | null
+  scheduledAt: string
+  courseId: string
+  lessonId?: string | null
+  courseTitle?: string
+  createdAt: string
+}
+
 export interface LiveSession {
   id: string
   title: string

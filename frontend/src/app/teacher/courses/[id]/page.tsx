@@ -1,7 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'
+import { format, parseISO, isPast } from 'date-fns'
+import { ru } from 'date-fns/locale'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -22,8 +24,8 @@ import {
   useInvalidateVideos,
   readMediaDuration,
 } from '@/hooks/api/useVideos'
-import { videosApi, apiClient, liveApi } from '@/lib/api'
-import type { CourseModule, Lesson, Material, Video } from '@/types'
+import { videosApi, apiClient, liveApi, scheduleApi } from '@/lib/api'
+import type { CourseModule, Lesson, Material, Video, ScheduledLesson } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -56,6 +58,7 @@ import {
   Play,
   Radio,
   ImageIcon,
+  CalendarDays,
 } from 'lucide-react'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -710,6 +713,46 @@ export default function TeacherCourseManagePage({
   const [uploadingCover, setUploadingCover] = useState(false)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Schedule state ──────────────────────────────────────────────────────
+  const [schedTitle, setSchedTitle] = useState('')
+  const [schedDate, setSchedDate] = useState('')
+  const [schedTime, setSchedTime] = useState('10:00')
+  const [schedDesc, setSchedDesc] = useState('')
+  const [addingLesson, setAddingLesson] = useState(false)
+
+  const { data: scheduleRaw, refetch: refetchSchedule } = useQuery({
+    queryKey: ['schedule', courseId],
+    queryFn: async () => {
+      const res = await scheduleApi.getByCourse(courseId)
+      return (res.data?.data ?? []) as ScheduledLesson[]
+    },
+  })
+  const scheduledLessons: ScheduledLesson[] = scheduleRaw ?? []
+
+  const { mutate: createLesson, isPending: creatingLesson } = useMutation({
+    mutationFn: () => {
+      const scheduledAt = new Date(`${schedDate}T${schedTime}:00`).toISOString()
+      return scheduleApi.create(courseId, {
+        title: schedTitle.trim(),
+        description: schedDesc.trim() || undefined,
+        scheduledAt,
+      })
+    },
+    onSuccess: () => {
+      toast.success('Занятие добавлено')
+      setSchedTitle(''); setSchedDate(''); setSchedTime('10:00'); setSchedDesc('')
+      setAddingLesson(false)
+      refetchSchedule()
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Ошибка'),
+  })
+
+  const { mutate: deleteLesson } = useMutation({
+    mutationFn: (id: string) => scheduleApi.delete(id),
+    onSuccess: () => { toast.success('Занятие удалено'); refetchSchedule() },
+    onError: () => toast.error('Не удалось удалить'),
+  })
+
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -721,9 +764,24 @@ export default function TeacherCourseManagePage({
     try {
       const form = new FormData()
       form.append('file', file)
-      await apiClient.post(`/courses/${courseId}/image`, form)
-      toast.success('Обложка обновлена')
+      const res = await apiClient.post(`/courses/${courseId}/image`, form)
+      // Backend wraps response: { success, data: { imageUrl }, timestamp }
+      const newImageUrl: string = res.data?.data?.imageUrl ?? res.data?.imageUrl
+
+      // 1. Immediately patch the cached course so the image renders without
+      //    waiting for a full refetch (important: refetch may still return
+      //    stale data if the server hasn't restarted with the new schema).
+      if (newImageUrl) {
+        queryClient.setQueryData(['courses', courseId], (old: any) =>
+          old ? { ...old, imageUrl: newImageUrl } : old,
+        )
+      }
+
+      // 2. Invalidate so React Query does a background refetch — once the
+      //    backend is fully restarted it will return imageUrl natively.
       queryClient.invalidateQueries({ queryKey: ['courses', courseId] })
+
+      toast.success('Обложка обновлена')
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? 'Ошибка загрузки обложки')
     } finally {
@@ -948,6 +1006,125 @@ export default function TeacherCourseManagePage({
                   {creatingLiveSession ? 'Создание...' : 'Создать живой урок'}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* ── Schedule section ─────────────────────────────────────────── */}
+          {course && (
+            <div className="mt-6 pt-5 border-t border-gray-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-indigo-500" />
+                    Расписание занятий
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Запланируйте уроки — студенты увидят их в своём Личном кабинете
+                  </p>
+                </div>
+                {!addingLesson && (
+                  <Button size="sm" variant="outline" onClick={() => setAddingLesson(true)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Добавить занятие
+                  </Button>
+                )}
+              </div>
+
+              {/* Add form */}
+              {addingLesson && (
+                <Card className="border-dashed border-2 border-indigo-200 bg-indigo-50/50">
+                  <CardContent className="pt-4 space-y-3">
+                    <Input
+                      placeholder="Название занятия *"
+                      value={schedTitle}
+                      onChange={(e) => setSchedTitle(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        type="date"
+                        value={schedDate}
+                        onChange={(e) => setSchedDate(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="time"
+                        value={schedTime}
+                        onChange={(e) => setSchedTime(e.target.value)}
+                        className="w-28"
+                      />
+                    </div>
+                    <Input
+                      placeholder="Описание (необязательно)"
+                      value={schedDesc}
+                      onChange={(e) => setSchedDesc(e.target.value)}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={creatingLesson || !schedTitle.trim() || !schedDate}
+                        onClick={() => createLesson()}
+                      >
+                        {creatingLesson ? 'Сохранение...' : 'Сохранить'}
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        onClick={() => {
+                          setAddingLesson(false)
+                          setSchedTitle(''); setSchedDate(''); setSchedTime('10:00'); setSchedDesc('')
+                        }}
+                      >
+                        Отмена
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Lesson list */}
+              {scheduledLessons.length > 0 ? (
+                <div className="space-y-2">
+                  {scheduledLessons.map((lesson) => {
+                    const dt = parseISO(lesson.scheduledAt)
+                    const past = isPast(dt)
+                    return (
+                      <div
+                        key={lesson.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg border group ${
+                          past ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-indigo-100'
+                        }`}
+                      >
+                        <div className={`mt-0.5 p-1.5 rounded-md ${past ? 'bg-gray-200' : 'bg-indigo-100'}`}>
+                          <CalendarDays className={`h-3.5 w-3.5 ${past ? 'text-gray-400' : 'text-indigo-600'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{lesson.title}</p>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                            <Clock className="h-3 w-3" />
+                            {format(dt, 'd MMM yyyy, HH:mm', { locale: ru })}
+                            {past && <span className="ml-1 text-gray-400">(прошло)</span>}
+                          </div>
+                          {lesson.description && (
+                            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{lesson.description}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteLesson(lesson.id)}
+                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity p-1 shrink-0"
+                          title="Удалить"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : !addingLesson ? (
+                <div className="text-center py-8 text-gray-400 text-sm border border-dashed rounded-lg">
+                  Занятий пока нет
+                </div>
+              ) : null}
             </div>
           )}
 

@@ -251,6 +251,19 @@ export const videosApi = {
   delete: (videoId: string) => apiClient.delete(`/videos/${videoId}`),
 }
 
+// Schedule API
+export const scheduleApi = {
+  /** Create a scheduled lesson for a course (teacher / admin). */
+  create: (courseId: string, dto: { title: string; description?: string; scheduledAt: string; lessonId?: string }) =>
+    apiClient.post(`/courses/${courseId}/schedule`, dto),
+  /** All scheduled lessons for a course. */
+  getByCourse: (courseId: string) => apiClient.get(`/courses/${courseId}/schedule`),
+  /** Upcoming lessons for the current user (student) or all course lessons (teacher). */
+  getMy: () => apiClient.get('/schedule/my'),
+  /** Delete a scheduled lesson. */
+  delete: (id: string) => apiClient.delete(`/schedule/${id}`),
+}
+
 // Enrollment management (admin)
 export const adminEnrollmentsApi = {
   getAll: (params?: Record<string, unknown>) => apiClient.get('/admin/enrollments', { params }),
