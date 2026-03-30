@@ -38,6 +38,9 @@ export class UsersRepository {
     lastName: string;
     role: string;
     isActive: boolean;
+    avatarUrl?: string | null;
+    bio?: string | null;
+    specialization?: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): UserEntity {
@@ -49,6 +52,9 @@ export class UsersRepository {
       lastName: prismaUser.lastName,
       role: prismaUser.role as Role,
       isActive: prismaUser.isActive,
+      avatarUrl: prismaUser.avatarUrl,
+      bio: prismaUser.bio,
+      specialization: prismaUser.specialization,
       createdAt: prismaUser.createdAt,
       updatedAt: prismaUser.updatedAt,
     });
@@ -123,6 +129,14 @@ export class UsersRepository {
       where: { id },
       data: { password: hashedPassword },
     });
+  }
+
+  async updateAvatarUrl(id: string, avatarUrl: string): Promise<UserEntity> {
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { avatarUrl },
+    });
+    return this.mapToEntity(user);
   }
 
   async existsByEmail(email: string): Promise<boolean> {

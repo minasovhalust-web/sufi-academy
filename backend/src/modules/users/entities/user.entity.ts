@@ -8,6 +8,9 @@ export class UserEntity {
   lastName: string;
   role: Role;
   isActive: boolean;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  specialization?: string | null;
   createdAt: Date;
   updatedAt: Date;
   constructor(partial: Partial<UserEntity>) { Object.assign(this, partial); }

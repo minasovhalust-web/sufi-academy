@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { StorageModule } from '../storage/storage.module';
 import { UsersController } from './controllers/users.controller';
 import { UsersService } from './services/users.service';
 import { UsersRepository } from './repositories/users.repository';
@@ -9,6 +10,8 @@ import { UsersRepository } from './repositories/users.repository';
  *
  * Imports:
  * - PrismaModule: required explicitly (not global) for UsersRepository.
+ * - StorageModule: provides STORAGE_SERVICE token used by UsersController
+ *   to upload avatar images.
  *
  * Exports:
  * - UsersService: exported so AuthModule can use it during login and
@@ -19,7 +22,7 @@ import { UsersRepository } from './repositories/users.repository';
  * External modules access user data only through UsersService.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, StorageModule],
   controllers: [UsersController],
   providers: [UsersService, UsersRepository],
   exports: [UsersService],

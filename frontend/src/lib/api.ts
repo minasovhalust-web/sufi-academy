@@ -131,6 +131,18 @@ export const authApi = {
   me: () => apiClient.get('/users/me'),
 }
 
+// Users API
+export const usersApi = {
+  getMe: () => apiClient.get('/users/me'),
+  uploadAvatar: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return apiClient.post('/users/avatar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
 // Courses API
 export const coursesApi = {
   getAll: (params?: Record<string, unknown>) => apiClient.get('/courses', { params }),

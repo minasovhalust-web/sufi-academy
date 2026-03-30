@@ -1,33 +1,38 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import {
-  format, startOfMonth, endOfMonth, eachDayOfInterval,
-  isSameDay, isSameMonth, addMonths, subMonths,
-  isToday, parseISO, startOfWeek, endOfWeek,
-} from 'date-fns'
-import { ru } from 'date-fns/locale'
 import { useQuery } from '@tanstack/react-query'
+import { parseISO, isToday, isTomorrow, format } from 'date-fns'
+import { ru } from 'date-fns/locale'
+import {
+  CalendarDays, Clock, Bell, BookOpen, ChevronRight, BellOff, CalendarX,
+} from 'lucide-react'
+import Link from 'next/link'
+
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { useMyEnrollments } from '@/hooks/api/useCourses'
 import { useNotifications } from '@/hooks/api/useNotifications'
 import { useAuthStore } from '@/store/auth.store'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EnrollmentCard } from '@/components/dashboard/EnrollmentCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { formatRelativeTime } from '@/lib/utils'
 import { scheduleApi } from '@/lib/api'
-import { ChevronLeft, ChevronRight, CalendarDays, Clock } from 'lucide-react'
 import type { ScheduledLesson } from '@/types'
-import Link from 'next/link'
 
-// ── Mini Calendar ──────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-function ScheduleCalendar() {
-  const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [selectedDay, setSelectedDay] = useState<Date | null>(new Date())
+function formatLessonDate(isoString: string): string {
+  const date = parseISO(isoString)
+  const time = format(date, 'HH:mm')
+  if (isToday(date)) return `Сегодня в ${time}`
+  if (isTomorrow(date)) return `Завтра в ${time}`
+  return `${format(date, 'd MMMM', { locale: ru })} в ${time}`
+}
 
+// ── Section: Upcoming Lessons ──────────────────────────────────────────────
+
+function UpcomingLessons() {
   const { data: raw, isLoading } = useQuery({
     queryKey: ['schedule', 'my'],
     queryFn: async () => {
@@ -35,303 +40,248 @@ function ScheduleCalendar() {
       return (res.data?.data ?? []) as ScheduledLesson[]
     },
   })
-  const lessons = raw ?? []
 
-  // Build a set of "YYYY-MM-DD" strings that have lessons
-  const busyDays = new Set(lessons.map((l) => l.scheduledAt.slice(0, 10)))
+  const now = new Date()
+  const upcoming = (raw ?? [])
+    .filter((l) => parseISO(l.scheduledAt) >= now)
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+    .slice(0, 5)
 
-  const monthStart = startOfMonth(currentMonth)
-  const monthEnd = endOfMonth(currentMonth)
-  // Full weeks grid (Mon–Sun)
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 })
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
-  const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-24 rounded-xl" />
+        ))}
+      </div>
+    )
+  }
 
-  const selectedLessons = selectedDay
-    ? lessons.filter((l) => isSameDay(parseISO(l.scheduledAt), selectedDay))
-    : []
-
-  const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+  if (upcoming.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-xl border border-gray-100 shadow-sm">
+        <CalendarX className="h-10 w-10 text-gray-200 mb-3" />
+        <p className="text-sm text-gray-400 font-medium">Нет предстоящих занятий</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Calendar grid */}
-      <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-        {/* Month navigation */}
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4 text-gray-500" />
-          </button>
-          <h3 className="font-semibold text-gray-800 capitalize">
-            {format(currentMonth, 'LLLL yyyy', { locale: ru })}
-          </h3>
-          <button
-            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ChevronRight className="h-4 w-4 text-gray-500" />
-          </button>
+    <div className="space-y-3">
+      {upcoming.map((lesson) => (
+        <div
+          key={lesson.id}
+          className="flex items-start gap-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow"
+        >
+          {/* Calendar icon badge */}
+          <div className="flex-shrink-0 bg-indigo-50 rounded-lg p-2.5">
+            <CalendarDays className="h-5 w-5 text-indigo-600" />
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-800 truncate">{lesson.title}</p>
+            <div className="flex items-center gap-1.5 mt-1 text-sm text-indigo-600">
+              <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{formatLessonDate(lesson.scheduledAt)}</span>
+            </div>
+            {lesson.courseTitle && (
+              <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.courseTitle}</p>
+            )}
+          </div>
+
+          {/* Action */}
+          <Button asChild size="sm" variant="outline" className="flex-shrink-0 self-center gap-1">
+            <Link href={`/learn/${lesson.courseId}`}>
+              Перейти
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
         </div>
-
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 mb-2">
-          {weekDays.map((d) => (
-            <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
-          ))}
-        </div>
-
-        {/* Day cells */}
-        {isLoading ? (
-          <div className="grid grid-cols-7 gap-1">
-            {Array.from({ length: 35 }).map((_, i) => (
-              <div key={i} className="h-9 rounded-lg bg-gray-100 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((day) => {
-              const key = format(day, 'yyyy-MM-dd')
-              const hasBusy = busyDays.has(key)
-              const isSelected = selectedDay ? isSameDay(day, selectedDay) : false
-              const inMonth = isSameMonth(day, currentMonth)
-              const todayClass = isToday(day)
-
-              return (
-                <button
-                  key={key}
-                  onClick={() => setSelectedDay(day)}
-                  className={[
-                    'relative h-9 w-full rounded-lg text-sm font-medium transition-all',
-                    !inMonth ? 'text-gray-300' : 'text-gray-700',
-                    isSelected
-                      ? 'bg-indigo-600 text-white shadow-md'
-                      : todayClass
-                      ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-300'
-                      : 'hover:bg-gray-50',
-                  ].join(' ')}
-                >
-                  {format(day, 'd')}
-                  {hasBusy && !isSelected && (
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-violet-500" />
-                  )}
-                  {hasBusy && isSelected && (
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-white" />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Day details panel */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col">
-        <h3 className="font-semibold text-gray-800 mb-1">
-          {selectedDay
-            ? format(selectedDay, 'd MMMM yyyy', { locale: ru })
-            : 'Выберите день'}
-        </h3>
-        <p className="text-xs text-gray-400 mb-4">
-          {selectedLessons.length > 0
-            ? `${selectedLessons.length} занятий`
-            : 'Занятий нет'}
-        </p>
-
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2].map((i) => <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />)}
-          </div>
-        ) : selectedLessons.length > 0 ? (
-          <div className="space-y-3 flex-1 overflow-y-auto">
-            {selectedLessons.map((lesson) => (
-              <div
-                key={lesson.id}
-                className="p-3 rounded-lg bg-indigo-50 border border-indigo-100"
-              >
-                <p className="font-medium text-sm text-gray-800">{lesson.title}</p>
-                {lesson.courseTitle && (
-                  <p className="text-xs text-indigo-600 mt-0.5">{lesson.courseTitle}</p>
-                )}
-                <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500">
-                  <Clock className="h-3 w-3" />
-                  {format(parseISO(lesson.scheduledAt), 'HH:mm')}
-                </div>
-                {lesson.description && (
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{lesson.description}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
-            <CalendarDays className="h-8 w-8 text-gray-200 mb-2" />
-            <p className="text-sm text-gray-400">Нет занятий</p>
-          </div>
-        )}
-      </div>
+      ))}
     </div>
   )
 }
 
+// ── Section: Notifications ─────────────────────────────────────────────────
+
+function NotificationsSection() {
+  const { data: notificationsData, isLoading } = useNotifications({ limit: 10 })
+  const notifications = notificationsData?.data?.data ?? []
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-20 rounded-xl" />
+        ))}
+      </div>
+    )
+  }
+
+  if (notifications.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center bg-white rounded-xl border border-gray-100 shadow-sm">
+        <BellOff className="h-10 w-10 text-gray-200 mb-3" />
+        <p className="text-sm text-gray-400 font-medium">Нет новых уведомлений</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {notifications.map((notification) => (
+        <div
+          key={notification.id}
+          className={[
+            'flex items-start gap-4 bg-white rounded-xl border shadow-sm p-4 transition-shadow hover:shadow-md',
+            notification.isRead ? 'border-gray-100' : 'border-indigo-100',
+          ].join(' ')}
+        >
+          {/* Bell icon */}
+          <div className={[
+            'flex-shrink-0 rounded-lg p-2.5',
+            notification.isRead ? 'bg-gray-50' : 'bg-indigo-50',
+          ].join(' ')}>
+            <Bell className={[
+              'h-5 w-5',
+              notification.isRead ? 'text-gray-400' : 'text-indigo-600',
+            ].join(' ')} />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <p className={['font-semibold truncate', notification.isRead ? 'text-gray-700' : 'text-gray-900'].join(' ')}>
+                {notification.title}
+              </p>
+              {!notification.isRead && (
+                <span className="flex-shrink-0 h-2 w-2 rounded-full bg-indigo-500 mt-1.5" />
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-0.5 line-clamp-2">{notification.body}</p>
+            <p className="text-xs text-gray-400 mt-1">{formatRelativeTime(notification.createdAt)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
+
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user)
   const { data: enrollmentsData, isLoading: enrollmentsLoading } = useMyEnrollments({ limit: 100 })
-  const { data: notificationsData, isLoading: notificationsLoading } = useNotifications({ limit: 10 })
 
-  const enrollments = enrollmentsData || []          // useMyEnrollments returns Enrollment[] directly
-  const notifications = notificationsData?.data?.data || []  // useNotifications returns ApiResponse<PaginatedResponse>
+  const enrollments = enrollmentsData ?? []
   const activeEnrollments = enrollments.filter((e) => e.status === 'ACTIVE')
   const completedEnrollments = enrollments.filter((e) => e.status === 'COMPLETED')
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-white">
-        <div className="container-base py-12">
+      <div className="min-h-screen bg-gray-50">
+        <div className="container-base py-10">
+
           {/* Greeting */}
-          <div className="mb-12">
-            <h1 className="text-4xl font-bold mb-2">Добро пожаловать, {user?.firstName}!</h1>
-            <p className="text-[var(--color-text-secondary)]">
+          <div className="mb-10">
+            <h1 className="text-3xl font-bold text-gray-900 mb-1">
+              Добро пожаловать, {user?.firstName}!
+            </h1>
+            <p className="text-gray-500 text-sm">
               Здесь вы можете отслеживать прогресс обучения и управлять своими курсами
             </p>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-[var(--color-text-secondary)]">
+          {/* Stats row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+            <Card className="shadow-sm border-gray-100">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
                   Всего записей
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{enrollments.length}</p>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-2">
-                  {activeEnrollments.length} активных
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{enrollments.length}</p>
+                <p className="text-xs text-gray-400 mt-1">{activeEnrollments.length} активных</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-[var(--color-text-secondary)]">
+            <Card className="shadow-sm border-gray-100">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
                   В процессе
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{activeEnrollments.length}</p>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-2">
-                  курсов в обучении
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{activeEnrollments.length}</p>
+                <p className="text-xs text-gray-400 mt-1">курсов в обучении</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-[var(--color-text-secondary)]">
+            <Card className="shadow-sm border-gray-100">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
                   Завершено
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{completedEnrollments.length}</p>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-2">
-                  успешно пройдено
-                </p>
+                <p className="text-3xl font-bold text-gray-900">{completedEnrollments.length}</p>
+                <p className="text-xs text-gray-400 mt-1">успешно пройдено</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* My Courses */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold mb-6">Мои курсы</h2>
+          {/* ── 1. Мои курсы ── */}
+          <section className="mb-10">
+            <div className="flex items-center gap-2 mb-5">
+              <BookOpen className="h-5 w-5 text-indigo-600" />
+              <h2 className="text-xl font-bold text-gray-900">Мои курсы</h2>
+            </div>
+
             {enrollmentsLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="space-y-4">
-                    <Skeleton className="h-48" />
-                  </div>
+                  <Skeleton key={i} className="h-52 rounded-xl" />
                 ))}
               </div>
             ) : enrollments.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {enrollments.map((enrollment) => (
                   <EnrollmentCard key={enrollment.id} enrollment={enrollment} />
                 ))}
               </div>
             ) : (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-8">
-                    <p className="text-[var(--color-text-secondary)] mb-4">
-                      Вы еще не записались ни на один курс
-                    </p>
-                    <Link href="/courses" className="text-[var(--color-primary)] hover:underline font-medium">
-                      Посмотреть доступные курсы
-                    </Link>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Schedule / Calendar */}
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold mb-2">Расписание</h2>
-            <p className="text-[var(--color-text-secondary)] mb-6 text-sm">
-              Предстоящие занятия по вашим курсам
-            </p>
-            <ScheduleCalendar />
-          </div>
-
-          {/* Notifications */}
-          <div>
-            <h2 className="text-2xl font-bold mb-6">Недавние уведомления</h2>
-            {notificationsLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-20" />
-                ))}
+              <div className="flex flex-col items-center justify-center py-14 text-center bg-white rounded-xl border border-gray-100 shadow-sm">
+                <BookOpen className="h-10 w-10 text-gray-200 mb-3" />
+                <p className="text-sm text-gray-400 font-medium mb-3">
+                  Вы ещё не записались ни на один курс
+                </p>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/courses">Посмотреть курсы</Link>
+                </Button>
               </div>
-            ) : notifications.length > 0 ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className="flex items-start gap-4 p-4 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-background-secondary)] transition-colors"
-                      >
-                        <div className="flex-1">
-                          <p className="font-medium">{notification.title}</p>
-                          <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                            {notification.body}
-                          </p>
-                          <p className="text-xs text-[var(--color-text-secondary)] mt-2">
-                            {formatRelativeTime(notification.createdAt)}
-                          </p>
-                        </div>
-                        {!notification.isRead && (
-                          <div className="h-2 w-2 bg-[var(--color-primary)] rounded-full flex-shrink-0 mt-2" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-8">
-                    <p className="text-[var(--color-text-secondary)]">
-                      Нет новых уведомлений
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
             )}
-          </div>
+          </section>
+
+          {/* ── 2. Предстоящие занятия ── */}
+          <section className="mb-10">
+            <div className="flex items-center gap-2 mb-5">
+              <CalendarDays className="h-5 w-5 text-indigo-600" />
+              <h2 className="text-xl font-bold text-gray-900">Предстоящие занятия</h2>
+            </div>
+            <UpcomingLessons />
+          </section>
+
+          {/* ── 3. Уведомления ── */}
+          <section>
+            <div className="flex items-center gap-2 mb-5">
+              <Bell className="h-5 w-5 text-indigo-600" />
+              <h2 className="text-xl font-bold text-gray-900">Уведомления</h2>
+            </div>
+            <NotificationsSection />
+          </section>
+
         </div>
       </div>
     </ProtectedRoute>

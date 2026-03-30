@@ -170,6 +170,14 @@ export class UsersService {
   }
 
   /**
+   * Updates the avatarUrl field for a user.
+   * Called after a successful file upload to StorageService.
+   */
+  async updateAvatar(id: string, avatarUrl: string): Promise<UserEntity> {
+    return this.usersRepository.updateAvatarUrl(id, avatarUrl);
+  }
+
+  /**
    * Validates a user's credentials during login.
    * Used exclusively by AuthService.
    * Returns the user if valid, null otherwise.

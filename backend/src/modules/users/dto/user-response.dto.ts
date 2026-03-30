@@ -7,6 +7,9 @@ export class UserResponseDto {
   lastName: string;
   role: Role;
   isActive: boolean;
+  avatarUrl?: string | null;
+  bio?: string | null;
+  specialization?: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -17,6 +20,9 @@ export class UserResponseDto {
     this.lastName = partial.lastName;
     this.role = partial.role;
     this.isActive = partial.isActive;
+    this.avatarUrl = partial.avatarUrl ?? null;
+    this.bio = partial.bio ?? null;
+    this.specialization = partial.specialization ?? null;
     this.createdAt = partial.createdAt;
     this.updatedAt = partial.updatedAt;
   }
