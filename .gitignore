@@ -1,2 +1,4 @@
 node_modules/
 .next/
+!frontend/.next
+!frontend/.next/**
