@@ -24,8 +24,9 @@ import {
   useInvalidateVideos,
   readMediaDuration,
 } from '@/hooks/api/useVideos'
-import { videosApi, apiClient, liveApi, scheduleApi } from '@/lib/api'
+import { videosApi, apiClient, liveApi, scheduleApi, courseRosterApi } from '@/lib/api'
 import type { CourseModule, Lesson, Material, Video, ScheduledLesson } from '@/types'
+import { getCountryLabel } from '@/app/settings/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -48,6 +49,7 @@ import {
   Video as VideoIcon,
   FileText,
   Link as LinkIcon,
+  Users,
   Music,
   File,
   ArrowLeft,
@@ -688,6 +690,109 @@ function ModuleItem({ module, courseId }: { module: CourseModule; courseId: stri
   )
 }
 
+// ── StudentRoster ─────────────────────────────────────────────────────────────
+
+interface RosterStudent {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  avatarUrl?: string | null
+  country?: string | null
+}
+
+interface RosterEnrollment {
+  id: string
+  status: string
+  progress: number
+  enrolledAt: string
+  user: RosterStudent
+}
+
+function StudentRoster({
+  courseId,
+  totalEnrollments,
+}: {
+  courseId: string
+  totalEnrollments: number
+}) {
+  const { data, isLoading } = useQuery<RosterEnrollment[]>({
+    queryKey: ['course-roster', courseId],
+    queryFn: async () => {
+      const res = await courseRosterApi.getByCourse(courseId)
+      return res.data ?? []
+    },
+  })
+
+  const students = data ?? []
+
+  const initials = (s: RosterStudent) =>
+    `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase()
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-200 space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="h-4 w-4 text-indigo-500" />
+        <h2 className="text-base font-semibold">
+          Студенты курса
+          {totalEnrollments > 0 && (
+            <span className="ml-2 text-sm font-normal text-gray-400">({totalEnrollments})</span>
+          )}
+        </h2>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+        </div>
+      ) : students.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm border border-dashed rounded-lg">
+          Студентов пока нет
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {students.map((enrollment) => {
+            const s = enrollment.user
+            const countryLabel = getCountryLabel(s.country)
+            return (
+              <div
+                key={enrollment.id}
+                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
+              >
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0">
+                  {s.avatarUrl ? (
+                    <img src={s.avatarUrl} alt={s.firstName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold text-indigo-600">{initials(s)}</span>
+                  )}
+                </div>
+
+                {/* Name + country */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-gray-900 truncate">
+                    {s.firstName} {s.lastName}
+                    {countryLabel && (
+                      <span className="ml-2 text-gray-400 font-normal">{countryLabel}</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                </div>
+
+                {/* Progress */}
+                <div className="shrink-0 text-right">
+                  <p className="text-xs text-gray-400 mb-0.5">Прогресс</p>
+                  <p className="text-sm font-semibold text-indigo-600">{Math.round(enrollment.progress)}%</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function TeacherCourseManagePage({
@@ -1126,6 +1231,11 @@ export default function TeacherCourseManagePage({
                 </div>
               ) : null}
             </div>
+          )}
+
+          {/* ── Students section ─────────────────────────────────────────── */}
+          {course && (
+            <StudentRoster courseId={courseId} totalEnrollments={course._count?.enrollments ?? 0} />
           )}
 
           {/* Modules section */}

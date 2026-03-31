@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getRoleLabel, getCourseStatusLabel, getInitials } from '@/lib/utils'
+import { getCountryLabel } from '@/app/settings/page'
 import { Trash2, Check, X, Clock, Mail } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth.store'
@@ -345,6 +346,7 @@ export default function AdminPage() {
                           <tr className="border-b border-[var(--color-border)]">
                             <th className="text-left p-2 font-semibold">Пользователь</th>
                             <th className="text-left p-2 font-semibold">Email</th>
+                            <th className="text-left p-2 font-semibold">Страна</th>
                             <th className="text-left p-2 font-semibold">Роль</th>
                             <th className="text-left p-2 font-semibold">Статус</th>
                             <th className="text-left p-2 font-semibold">Действия</th>
@@ -372,6 +374,9 @@ export default function AdminPage() {
                                   </div>
                                 </td>
                                 <td className="p-2 text-[var(--color-text-secondary)]">{user.email}</td>
+                                <td className="p-2 text-sm text-gray-600 whitespace-nowrap">
+                                  {getCountryLabel(user.country) || <span className="text-gray-300">—</span>}
+                                </td>
                                 <td className="p-2">
                                   <Select
                                     value={user.role}

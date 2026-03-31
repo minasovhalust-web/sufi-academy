@@ -10,6 +10,7 @@ export class UserResponseDto {
   avatarUrl?: string | null;
   bio?: string | null;
   specialization?: string | null;
+  country?: string | null;
   createdAt: Date;
   updatedAt: Date;
 
@@ -23,6 +24,7 @@ export class UserResponseDto {
     this.avatarUrl = partial.avatarUrl ?? null;
     this.bio = partial.bio ?? null;
     this.specialization = partial.specialization ?? null;
+    this.country = partial.country ?? null;
     this.createdAt = partial.createdAt;
     this.updatedAt = partial.updatedAt;
   }

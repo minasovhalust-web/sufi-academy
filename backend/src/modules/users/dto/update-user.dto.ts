@@ -7,4 +7,5 @@ export class UpdateUserDto {
   @IsString() @IsOptional() @MaxLength(50) lastName?: string;
   @IsEnum(Role) @IsOptional() role?: Role;
   @IsBoolean() @IsOptional() isActive?: boolean;
+  @IsString() @IsOptional() @MaxLength(100) country?: string;
 }

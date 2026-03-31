@@ -11,6 +11,7 @@ export class UserEntity {
   avatarUrl?: string | null;
   bio?: string | null;
   specialization?: string | null;
+  country?: string | null;
   createdAt: Date;
   updatedAt: Date;
   constructor(partial: Partial<UserEntity>) { Object.assign(this, partial); }

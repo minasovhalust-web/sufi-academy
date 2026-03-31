@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Menu, MessageSquare, X } from 'lucide-react'
 import { useAuthStore } from '@/store/auth.store'
+import { getInitials } from '@/lib/utils'
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -69,7 +70,27 @@ export function Navbar() {
                 >
                   <MessageSquare className="h-5 w-5" />
                 </Link>
-                <span className="text-sm font-medium text-gray-700">{user?.firstName}</span>
+                {/* Avatar + name → links to settings */}
+                <Link
+                  href="/settings"
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  title="Настройки профиля"
+                >
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0 ring-1 ring-gray-200">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.firstName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-bold text-indigo-600 leading-none select-none">
+                        {getInitials(user?.firstName ?? '', user?.lastName ?? '')}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{user?.firstName}</span>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="text-sm px-3 py-1.5 border rounded-md hover:bg-gray-50"
@@ -126,9 +147,31 @@ export function Navbar() {
             {/* Auth actions */}
             {isAuthenticated ? (
               <div className="space-y-1">
-                <div className="px-3 py-2 text-sm text-gray-500">
-                  Вы вошли как <span className="font-semibold text-gray-800">{user?.firstName} {user?.lastName}</span>
-                </div>
+                <Link
+                  href="/settings"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0 ring-1 ring-gray-200">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.firstName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-indigo-600 select-none">
+                        {getInitials(user?.firstName ?? '', user?.lastName ?? '')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-800 truncate">
+                      {user?.firstName} {user?.lastName}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+                  </div>
+                </Link>
                 <Link
                   href="/messages"
                   className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"

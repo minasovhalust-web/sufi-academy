@@ -38,6 +38,7 @@ const USER_SELECT = {
   bio: true,
   avatarUrl: true,
   specialization: true,
+  country: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -78,6 +79,8 @@ const ENROLLMENT_USER_SELECT = {
   firstName: true,
   lastName: true,
   email: true,
+  avatarUrl: true,
+  country: true,
 } as const;
 
 const ENROLLMENT_COURSE_SELECT = {

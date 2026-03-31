@@ -125,6 +125,7 @@ export class UsersService {
       ...(dto.email && { email: dto.email }),
       ...(dto.role && { role: dto.role }),
       ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      ...(dto.country !== undefined && { country: dto.country || null }),
     });
 
     // Emit event when a user is promoted to TEACHER

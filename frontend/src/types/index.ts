@@ -9,6 +9,7 @@ export interface User {
   bio?: string
   avatarUrl?: string
   specialization?: string
+  country?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -73,7 +74,7 @@ export interface Video {
 export interface Enrollment {
   id: string
   status: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED'
-  user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>
+  user?: Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'avatarUrl' | 'country'>
   progress: number
   userId: string
   courseId: string

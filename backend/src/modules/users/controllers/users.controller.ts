@@ -29,6 +29,16 @@ import { Role } from '../../../common/enums/role.enum';
 import { JwtPayload } from '../../auth/strategies/jwt.strategy';
 import { STORAGE_SERVICE, StorageService } from '../../storage/storage.interface';
 
+/** Minimal Multer file shape — avoids dependency on @types/multer */
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
@@ -70,7 +80,7 @@ export class UsersController {
     FileInterceptor('file', { storage: memoryStorage() }),
   )
   async uploadAvatar(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
     @CurrentUser() user: JwtPayload,
   ) {
     if (!file) {

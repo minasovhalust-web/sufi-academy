@@ -41,6 +41,7 @@ export class UsersRepository {
     avatarUrl?: string | null;
     bio?: string | null;
     specialization?: string | null;
+    country?: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): UserEntity {
@@ -55,6 +56,7 @@ export class UsersRepository {
       avatarUrl: prismaUser.avatarUrl,
       bio: prismaUser.bio,
       specialization: prismaUser.specialization,
+      country: prismaUser.country,
       createdAt: prismaUser.createdAt,
       updatedAt: prismaUser.updatedAt,
     });
@@ -115,6 +117,7 @@ export class UsersRepository {
       lastName: string;
       role: Role;
       isActive: boolean;
+      country: string | null;
     }>,
   ): Promise<UserEntity> {
     const user = await this.prisma.user.update({

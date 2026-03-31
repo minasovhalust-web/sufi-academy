@@ -50,6 +50,7 @@ interface ChatMessageSender {
   id: string
   firstName: string
   lastName: string
+  avatarUrl?: string | null
 }
 
 interface ReplyToMessage {
@@ -644,7 +645,21 @@ function ChatPanel({ courseId }: { courseId: string }) {
               onMouseEnter={() => setHoveredMessageId(msg.id)}
               onMouseLeave={() => setHoveredMessageId(null)}
             >
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-center gap-2">
+                {/* Sender avatar */}
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0 ring-1 ring-gray-100">
+                  {msg.sender.avatarUrl ? (
+                    <img
+                      src={msg.sender.avatarUrl}
+                      alt={msg.sender.firstName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[9px] font-bold text-indigo-600 leading-none select-none">
+                      {(msg.sender.firstName[0] ?? '') + (msg.sender.lastName[0] ?? '')}
+                    </span>
+                  )}
+                </div>
                 <span className="font-semibold text-sm text-gray-900">
                   {msg.sender.firstName} {msg.sender.lastName}
                 </span>

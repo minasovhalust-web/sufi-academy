@@ -134,6 +134,8 @@ export const authApi = {
 // Users API
 export const usersApi = {
   getMe: () => apiClient.get('/users/me'),
+  updateMe: (userId: string, dto: Record<string, unknown>) =>
+    apiClient.patch(`/users/${userId}`, dto),
   uploadAvatar: (file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -141,6 +143,12 @@ export const usersApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+}
+
+// Enrollments by course (instructor/admin)
+export const courseRosterApi = {
+  getByCourse: (courseId: string) =>
+    apiClient.get(`/enrollments/course/${courseId}`),
 }
 
 // Courses API

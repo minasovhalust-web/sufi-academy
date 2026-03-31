@@ -33,9 +33,17 @@ export class EnrollmentsRepository {
       where: { courseId },
       include: {
         user: {
-          select: { id: true, firstName: true, lastName: true, email: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatarUrl: true,
+            country: true,
+          },
         },
       },
+      orderBy: { enrolledAt: 'desc' },
     });
   }
 
