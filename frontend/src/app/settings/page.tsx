@@ -215,7 +215,7 @@ export const COUNTRIES: { code: string; name: string; flag: string }[] = [
 ]
 
 /** Возвращает флаг + название страны по коду */
-export function getCountryLabel(code: string | null | undefined): string {
+function getCountryLabel(code: string | null | undefined): string {
   if (!code) return ''
   const c = COUNTRIES.find((x) => x.code === code)
   return c ? `${c.flag} ${c.name}` : code
