@@ -24,8 +24,8 @@ import {
   useInvalidateVideos,
   readMediaDuration,
 } from '@/hooks/api/useVideos'
-import { videosApi, apiClient, liveApi, scheduleApi, courseRosterApi } from '@/lib/api'
-import type { CourseModule, Lesson, Material, Video, ScheduledLesson } from '@/types'
+import { videosApi, apiClient, liveApi, scheduleApi, courseRosterApi, progressApi } from '@/lib/api'
+import type { CourseModule, Lesson, Material, Video, ScheduledLesson, StudentProgressItem } from '@/types'
 import { getCountryLabel } from '@/app/settings/page'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,6 +61,7 @@ import {
   Radio,
   ImageIcon,
   CalendarDays,
+  BarChart2,
 } from 'lucide-react'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -793,6 +794,85 @@ function StudentRoster({
   )
 }
 
+// ── StudentProgressGrid ────────────────────────────────────────────────────────
+
+function StudentProgressGrid({ courseId }: { courseId: string }) {
+  const { data, isLoading } = useQuery<StudentProgressItem[]>({
+    queryKey: ['student-progress', courseId],
+    queryFn: async () => {
+      const res = await progressApi.getStudentProgress(courseId)
+      return res.data.data ?? []
+    },
+  })
+
+  const students = data ?? []
+
+  const initials = (s: StudentProgressItem) =>
+    `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase()
+
+  return (
+    <div className="mt-6 pt-5 border-t border-gray-200 space-y-4">
+      <div className="flex items-center gap-2">
+        <BarChart2 className="h-4 w-4 text-indigo-500" />
+        <h2 className="text-base font-semibold">Прогресс студентов</h2>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
+        </div>
+      ) : students.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 text-sm border border-dashed rounded-lg">
+          Нет данных о прогрессе
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {students.map((s) => {
+            const pct = s.totalCount > 0 ? Math.round((s.completedCount / s.totalCount) * 100) : 0
+            return (
+              <div
+                key={s.userId}
+                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 shadow-sm"
+              >
+                {/* Avatar */}
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0">
+                  {s.avatarUrl ? (
+                    <img src={s.avatarUrl} alt={s.firstName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold text-indigo-600">{initials(s)}</span>
+                  )}
+                </div>
+                {/* Name */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {s.firstName} {s.lastName}
+                  </p>
+                  {/* Progress bar */}
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500 shrink-0 w-20 text-right">
+                      {s.completedCount} / {s.totalCount} уроков
+                    </span>
+                  </div>
+                </div>
+                {/* Percentage badge */}
+                <span className={`shrink-0 text-sm font-semibold w-12 text-right ${pct === 100 ? 'text-green-600' : 'text-indigo-600'}`}>
+                  {pct}%
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function TeacherCourseManagePage({
@@ -1236,6 +1316,11 @@ export default function TeacherCourseManagePage({
           {/* ── Students section ─────────────────────────────────────────── */}
           {course && (
             <StudentRoster courseId={courseId} totalEnrollments={course._count?.enrollments ?? 0} />
+          )}
+
+          {/* ── Student progress section ──────────────────────────────────── */}
+          {course && (
+            <StudentProgressGrid courseId={courseId} />
           )}
 
           {/* Modules section */}

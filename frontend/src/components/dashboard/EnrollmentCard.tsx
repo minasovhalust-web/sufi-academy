@@ -8,9 +8,13 @@ import type { Enrollment } from '@/types'
 
 interface EnrollmentCardProps {
   enrollment: Enrollment
+  lessonProgress?: { completedCount: number; totalCount: number }
 }
 
-export function EnrollmentCard({ enrollment }: EnrollmentCardProps) {
+export function EnrollmentCard({ enrollment, lessonProgress }: EnrollmentCardProps) {
+  const haslp = lessonProgress && lessonProgress.totalCount > 0
+  const lpPct = haslp ? Math.round((lessonProgress.completedCount / lessonProgress.totalCount) * 100) : null
+
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
       <CardHeader>
@@ -41,14 +45,20 @@ export function EnrollmentCard({ enrollment }: EnrollmentCardProps) {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Прогресс</span>
-            <span className="text-sm text-[var(--color-text-secondary)]">{Math.round(enrollment.progress)}%</span>
+            {haslp ? (
+              <span className="text-sm text-[var(--color-text-secondary)]">
+                {lessonProgress.completedCount} из {lessonProgress.totalCount} уроков
+              </span>
+            ) : (
+              <span className="text-sm text-[var(--color-text-secondary)]">{Math.round(enrollment.progress)}%</span>
+            )}
           </div>
-          <Progress value={enrollment.progress} />
+          <Progress value={haslp ? lpPct! : enrollment.progress} />
         </div>
 
         <Button asChild className="w-full">
           <Link href={`/learn/${enrollment.courseId}`}>
-            {enrollment.progress === 100 ? 'Пересмотреть' : 'Продолжить обучение'}
+            {(haslp ? lpPct === 100 : enrollment.progress === 100) ? 'Пересмотреть' : 'Продолжить обучение'}
           </Link>
         </Button>
       </CardContent>

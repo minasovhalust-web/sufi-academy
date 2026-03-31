@@ -271,6 +271,18 @@ export const videosApi = {
   delete: (videoId: string) => apiClient.delete(`/videos/${videoId}`),
 }
 
+// Progress API
+export const progressApi = {
+  /** Mark a lesson as completed. */
+  complete: (lessonId: string) => apiClient.post(`/progress/lesson/${lessonId}`),
+  /** Unmark a lesson (set incomplete). */
+  uncomplete: (lessonId: string) => apiClient.delete(`/progress/lesson/${lessonId}`),
+  /** Get current user's progress for a course. */
+  getCourseProgress: (courseId: string) => apiClient.get(`/progress/course/${courseId}`),
+  /** Get per-student progress for a course (teacher/admin). */
+  getStudentProgress: (courseId: string) => apiClient.get(`/progress/course/${courseId}/students`),
+}
+
 // Schedule API
 export const scheduleApi = {
   /** Create a scheduled lesson for a course (teacher / admin). */

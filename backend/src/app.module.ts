@@ -17,6 +17,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { DirectMessagesModule } from './modules/direct-messages/direct-messages.module';
 import { ScheduleModule } from './modules/schedule/schedule.module';
+import { ProgressModule } from './modules/progress/progress.module';
 
 // Common
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -89,6 +90,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
     // Phase 10 feature modules
     ScheduleModule,
+
+    // Phase 11 feature modules
+    ProgressModule,
 
     // Future modules added here as implemented:
     // MaterialsModule,

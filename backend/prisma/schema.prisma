@@ -122,6 +122,9 @@ model User {
   // Notification relations (Phase 6)
   notifications Notification[]
 
+  // Progress relations (Phase 11)
+  lessonProgress LessonProgress[]
+
   @@map("users")
 }
 
@@ -207,10 +210,11 @@ model Lesson {
   duration Int?
   module   CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   moduleId String
-  materials Material[]
-  videos    Video[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  materials      Material[]
+  videos         Video[]
+  lessonProgress LessonProgress[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@map("lessons")
 }
@@ -387,6 +391,22 @@ model ActivityLog {
   @@index([event, createdAt])
   @@index([actorId, createdAt])
   @@map("activity_logs")
+}
+
+// ── LESSON PROGRESS ─────────────────────────────────────────
+
+model LessonProgress {
+  id          String    @id @default(uuid())
+  userId      String
+  lessonId    String
+  courseId    String
+  completedAt DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId, courseId])
+  @@map("lesson_progress")
 }
 
 // ── DIRECT MESSAGE ───────────────────────────────────────────

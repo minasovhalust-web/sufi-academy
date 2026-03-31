@@ -17,8 +17,8 @@ import { EnrollmentCard } from '@/components/dashboard/EnrollmentCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { formatRelativeTime } from '@/lib/utils'
-import { scheduleApi } from '@/lib/api'
-import type { ScheduledLesson } from '@/types'
+import { scheduleApi, progressApi } from '@/lib/api'
+import type { ScheduledLesson, LessonProgressData } from '@/types'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -178,6 +178,29 @@ export default function DashboardPage() {
   const activeEnrollments = enrollments.filter((e) => e.status === 'ACTIVE')
   const completedEnrollments = enrollments.filter((e) => e.status === 'COMPLETED')
 
+  // Fetch lesson progress for all active/completed enrollments
+  const courseIds = enrollments.map((e) => e.courseId)
+  const { data: progressMap } = useQuery<Record<string, { completedCount: number; totalCount: number }>>({
+    queryKey: ['progress-bulk', courseIds.join(',')],
+    queryFn: async () => {
+      const results = await Promise.all(
+        courseIds.map((id) =>
+          progressApi.getCourseProgress(id).then((r) => ({
+            courseId: id,
+            data: r.data.data as LessonProgressData,
+          })).catch(() => ({ courseId: id, data: null }))
+        )
+      )
+      return Object.fromEntries(
+        results.filter((r) => r.data).map((r) => [
+          r.courseId,
+          { completedCount: r.data!.completedCount, totalCount: r.data!.totalCount },
+        ])
+      )
+    },
+    enabled: courseIds.length > 0,
+  })
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50">
@@ -248,7 +271,11 @@ export default function DashboardPage() {
             ) : enrollments.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {enrollments.map((enrollment) => (
-                  <EnrollmentCard key={enrollment.id} enrollment={enrollment} />
+                  <EnrollmentCard
+                    key={enrollment.id}
+                    enrollment={enrollment}
+                    lessonProgress={progressMap?.[enrollment.courseId]}
+                  />
                 ))}
               </div>
             ) : (

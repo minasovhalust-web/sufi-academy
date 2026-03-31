@@ -148,6 +148,21 @@ export interface ChatMessage {
   createdAt: string
 }
 
+export interface LessonProgressData {
+  completedLessonIds: string[]
+  completedCount: number
+  totalCount: number
+}
+
+export interface StudentProgressItem {
+  userId: string
+  firstName: string
+  lastName: string
+  avatarUrl: string | null
+  completedCount: number
+  totalCount: number
+}
+
 export interface ApiResponse<T> {
   data: T
   message?: string

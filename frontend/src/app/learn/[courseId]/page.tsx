@@ -11,7 +11,8 @@ import {
   useCourseMaterials,
 } from '@/hooks/api/useCourses'
 import { useVideosByLesson } from '@/hooks/api/useVideos'
-import { chatApi, storageApi } from '@/lib/api'
+import { chatApi, storageApi, progressApi } from '@/lib/api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -850,6 +851,51 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
   const [activeTab, setActiveTab] = useState<ActiveTab>('lesson')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // ── Progress tracking ──────────────────────────────────────────────────────
+  const queryClient = useQueryClient()
+
+  const { data: progressData } = useQuery({
+    queryKey: ['progress', params.courseId],
+    queryFn: async () => {
+      const res = await progressApi.getCourseProgress(params.courseId)
+      return res.data.data as { completedLessonIds: string[]; completedCount: number; totalCount: number }
+    },
+    enabled: isAuthenticated,
+  })
+
+  const completedLessonIds = new Set<string>(progressData?.completedLessonIds ?? [])
+
+  const toggleProgressMutation = useMutation({
+    mutationFn: async ({ lessonId, completed }: { lessonId: string; completed: boolean }) => {
+      if (completed) {
+        await progressApi.uncomplete(lessonId)
+      } else {
+        await progressApi.complete(lessonId)
+      }
+    },
+    onMutate: async ({ lessonId, completed }) => {
+      // Optimistic update
+      await queryClient.cancelQueries({ queryKey: ['progress', params.courseId] })
+      const prev = queryClient.getQueryData<{ completedLessonIds: string[]; completedCount: number; totalCount: number }>(['progress', params.courseId])
+      queryClient.setQueryData(['progress', params.courseId], (old: typeof prev) => {
+        if (!old) return old
+        const ids = new Set(old.completedLessonIds)
+        if (completed) ids.delete(lessonId)
+        else ids.add(lessonId)
+        return { ...old, completedLessonIds: Array.from(ids), completedCount: ids.size }
+      })
+      return { prev }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.prev) {
+        queryClient.setQueryData(['progress', params.courseId], context.prev)
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['progress', params.courseId] })
+    },
+  })
+
   // Derive the active Lesson object from already-loaded modules data.
   // This avoids a separate fetch to /lessons/:id (which is a nested-only route).
   const activeLesson = activeLessonId
@@ -1026,9 +1072,23 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
           md:translate-x-0
         `}>
           <div className="p-4 border-b">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
               Содержание курса
             </p>
+            {progressData && progressData.totalCount > 0 && (
+              <div className="mt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-500">{progressData.completedCount} из {progressData.totalCount} уроков</span>
+                  <span className="text-xs font-semibold text-green-600">{Math.round((progressData.completedCount / progressData.totalCount) * 100)}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all duration-500"
+                    style={{ width: `${(progressData.completedCount / progressData.totalCount) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {modulesLoading ? (
@@ -1068,37 +1128,64 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
                         module.lessons.map((lesson, lessonIndex) => {
                           const isActive =
                             activeLessonId === lesson.id && activeTab === 'lesson'
+                          const isDone = completedLessonIds.has(lesson.id)
                           return (
-                            <button
+                            <div
                               key={lesson.id}
-                              onClick={() => handleSelectLesson(lesson.id, module.id)}
-                              className={`w-full flex items-start gap-3 px-4 py-2.5 text-left transition-colors ${
+                              className={`flex items-start gap-1 transition-colors ${
                                 isActive
                                   ? 'bg-blue-50 border-r-2 border-blue-500'
                                   : 'hover:bg-gray-50'
                               }`}
                             >
-                              <span className="w-5 h-5 rounded-full border flex items-center justify-center text-xs text-gray-400 shrink-0 mt-0.5">
-                                {lessonIndex + 1}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p
-                                  className={`text-sm leading-tight ${
-                                    isActive
-                                      ? 'font-semibold text-blue-700'
-                                      : 'text-gray-700'
-                                  }`}
-                                >
-                                  {lesson.title}
-                                </p>
-                                {lesson.duration && (
-                                  <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {lesson.duration} мин
-                                  </p>
+                              {/* Checkbox to mark lesson done */}
+                              <button
+                                title={isDone ? 'Отметить как не пройденный' : 'Отметить как пройденный'}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleProgressMutation.mutate({ lessonId: lesson.id, completed: isDone })
+                                }}
+                                className="shrink-0 mt-3 ml-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors hover:border-green-500"
+                                style={{
+                                  backgroundColor: isDone ? '#22c55e' : 'transparent',
+                                  borderColor: isDone ? '#22c55e' : '#d1d5db',
+                                }}
+                              >
+                                {isDone && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2 6l3 3 5-5" />
+                                  </svg>
                                 )}
-                              </div>
-                            </button>
+                              </button>
+                              {/* Lesson title button */}
+                              <button
+                                onClick={() => handleSelectLesson(lesson.id, module.id)}
+                                className="flex-1 flex items-start gap-2 px-2 py-2.5 text-left"
+                              >
+                                <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs shrink-0 mt-0.5 ${isDone ? 'border-green-300 text-green-500' : 'text-gray-400'}`}>
+                                  {lessonIndex + 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <p
+                                    className={`text-sm leading-tight ${
+                                      isActive
+                                        ? 'font-semibold text-blue-700'
+                                        : isDone
+                                        ? 'text-gray-500 line-through'
+                                        : 'text-gray-700'
+                                    }`}
+                                  >
+                                    {lesson.title}
+                                  </p>
+                                  {lesson.duration && (
+                                    <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      {lesson.duration} мин
+                                    </p>
+                                  )}
+                                </div>
+                              </button>
+                            </div>
                           )
                         })
                       )}
