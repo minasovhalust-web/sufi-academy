@@ -38,7 +38,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { getRoleLabel, getCourseStatusLabel, getInitials } from '@/lib/utils'
-import { getCountryLabel } from '@/app/settings/page'
+import { getCountryLabel } from '@/lib/countries'
 import { Trash2, Check, X, Clock, Mail } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth.store'

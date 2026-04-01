@@ -26,7 +26,7 @@ import {
 } from '@/hooks/api/useVideos'
 import { videosApi, apiClient, liveApi, scheduleApi, courseRosterApi, progressApi } from '@/lib/api'
 import type { CourseModule, Lesson, Material, Video, ScheduledLesson, StudentProgressItem } from '@/types'
-import { getCountryLabel } from '@/app/settings/page'
+import { getCountryLabel } from '@/lib/countries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
