@@ -53,29 +53,8 @@ export function Footer() {
           <div className="flex flex-col gap-4">
             <h4 className="font-semibold text-sm">Контакты</h4>
             <div className="text-sm text-[var(--color-text-secondary)] space-y-1">
-              <p>Email: info@sufi-academy.ru</p>
-              <p>Телефон: +7 (999) 123-45-67</p>
+              <p>Email: muzasufy.org@gmail.com</p>
             </div>
-          </div>
-        </div>
-
-        <div className="border-t border-[var(--color-border)] pt-6 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            © 2024 Академия Суфийской Философии. Все права защищены.
-          </p>
-          <div className="flex gap-4 mt-4 md:mt-0">
-            <Link
-              href="/"
-              className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-colors"
-            >
-              Политика конфиденциальности
-            </Link>
-            <Link
-              href="/"
-              className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-primary)] transition-colors"
-            >
-              Условия использования
-            </Link>
           </div>
         </div>
       </div>

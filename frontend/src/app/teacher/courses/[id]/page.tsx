@@ -24,7 +24,7 @@ import {
   useInvalidateVideos,
   readMediaDuration,
 } from '@/hooks/api/useVideos'
-import { videosApi, apiClient, liveApi, scheduleApi, courseRosterApi, progressApi } from '@/lib/api'
+import { videosApi, apiClient, liveApi, scheduleApi, courseRosterApi, progressApi, storageApi, coursesApi } from '@/lib/api'
 import type { CourseModule, Lesson, Material, Video, ScheduledLesson, StudentProgressItem } from '@/types'
 import { getCountryLabel } from '@/lib/countries'
 import { Button } from '@/components/ui/button'
@@ -947,28 +947,24 @@ export default function TeacherCourseManagePage({
     }
     setUploadingCover(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await apiClient.post(`/courses/${courseId}/image`, form)
-      // Backend wraps response: { success, data: { imageUrl }, timestamp }
-      const newImageUrl: string = res.data?.data?.imageUrl ?? res.data?.imageUrl
+      // Step 1: upload file to storage and get back a public URL.
+      const uploadRes = await storageApi.upload(file)
+      const { url } = uploadRes.data.data as { url: string; key: string; name: string; mimeType: string; size: number }
+      if (!url) throw new Error('Не удалось получить URL загруженного файла')
 
-      // 1. Immediately patch the cached course so the image renders without
-      //    waiting for a full refetch (important: refetch may still return
-      //    stale data if the server hasn't restarted with the new schema).
-      if (newImageUrl) {
-        queryClient.setQueryData(['courses', courseId], (old: any) =>
-          old ? { ...old, imageUrl: newImageUrl } : old,
-        )
-      }
+      // Step 2: persist imageUrl on the course via PATCH /courses/:id.
+      await coursesApi.update(courseId, { imageUrl: url })
 
-      // 2. Invalidate so React Query does a background refetch — once the
-      //    backend is fully restarted it will return imageUrl natively.
+      // Step 3: optimistically update the React Query cache so the image
+      //         appears immediately without waiting for a full refetch.
+      queryClient.setQueryData(['courses', courseId], (old: any) =>
+        old ? { ...old, imageUrl: url } : old,
+      )
       queryClient.invalidateQueries({ queryKey: ['courses', courseId] })
 
       toast.success('Обложка обновлена')
     } catch (err: any) {
-      toast.error(err.response?.data?.message ?? 'Ошибка загрузки обложки')
+      toast.error(err.response?.data?.message ?? err.message ?? 'Ошибка загрузки обложки')
     } finally {
       setUploadingCover(false)
       if (coverInputRef.current) coverInputRef.current.value = ''
