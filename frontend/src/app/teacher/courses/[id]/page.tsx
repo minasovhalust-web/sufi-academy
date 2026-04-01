@@ -952,8 +952,8 @@ export default function TeacherCourseManagePage({
       const { url } = uploadRes.data.data as { url: string; key: string; name: string; mimeType: string; size: number }
       if (!url) throw new Error('Не удалось получить URL загруженного файла')
 
-      // Step 2: persist imageUrl on the course via PATCH /courses/:id.
-      await coursesApi.update(courseId, { imageUrl: url })
+      // Step 2: persist imageUrl via POST /courses/:id/image with JSON body.
+      await apiClient.post(`/courses/${courseId}/image`, { imageUrl: url })
 
       // Step 3: optimistically update the React Query cache so the image
       //         appears immediately without waiting for a full refetch.

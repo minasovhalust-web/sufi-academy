@@ -134,8 +134,8 @@ export const authApi = {
 // Users API
 export const usersApi = {
   getMe: () => apiClient.get('/users/me'),
-  updateMe: (userId: string, dto: Record<string, unknown>) =>
-    apiClient.patch(`/users/${userId}`, dto),
+  updateMe: (_userId: string, dto: Record<string, unknown>) =>
+    apiClient.patch('/users/me', dto),
   uploadAvatar: (file: File) => {
     const form = new FormData()
     form.append('file', file)

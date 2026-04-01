@@ -37,11 +37,23 @@ export class CoursesService {
     return course;
   }
 
-  async findAll(filters?: {
-    status?: any;
-    instructorId?: string;
-  }): Promise<any[]> {
-    return this.coursesRepository.findAll(filters);
+  async findAll(
+    filters?: { status?: any; instructorId?: string },
+    role?: string,
+  ): Promise<any[]> {
+    // Non-privileged users (students, guests) may only see published courses.
+    const isPrivileged = role === Role.ADMIN || role === Role.TEACHER;
+    const effectiveFilters = {
+      ...filters,
+      // Force PUBLISHED unless an admin/teacher is requesting AND no explicit
+      // status filter is already applied.
+      status: isPrivileged && filters?.status ? filters.status : 'PUBLISHED',
+    };
+    // Admins/teachers browsing without a status filter should see everything.
+    if (isPrivileged && !filters?.status) {
+      delete effectiveFilters.status;
+    }
+    return this.coursesRepository.findAll(effectiveFilters);
   }
 
   async findMy(instructorId: string): Promise<any[]> {

@@ -6,33 +6,17 @@ import {
   Get,
   HttpCode,
   HttpStatus,
-  Inject,
   Param,
   Patch,
   Post,
   Query,
   Req,
-  UploadedFile,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { CoursesService } from '../services/courses.service';
 import { CreateCourseDto } from '../dto/course/create-course.dto';
 import { UpdateCourseDto } from '../dto/course/update-course.dto';
 import { CourseStatus } from '@prisma/client';
 import { Public } from '../../../common/decorators/public.decorator';
-import { STORAGE_SERVICE, StorageService } from '../../storage/storage.interface';
-import { randomUUID } from 'crypto';
-import { extname } from 'path';
-
-interface MulterFile {
-  fieldname: string;
-  originalname: string;
-  encoding: string;
-  mimetype: string;
-  size: number;
-  buffer: Buffer;
-}
 
 /**
  * CoursesController — CRUD for courses.
@@ -46,10 +30,7 @@ interface MulterFile {
  */
 @Controller('courses')
 export class CoursesController {
-  constructor(
-    private readonly coursesService: CoursesService,
-    @Inject(STORAGE_SERVICE) private readonly storageService: StorageService,
-  ) {}
+  constructor(private readonly coursesService: CoursesService) {}
 
   @Post()
   create(@Body() dto: CreateCourseDto, @Req() req: any) {
@@ -61,8 +42,10 @@ export class CoursesController {
   findAll(
     @Query('status') status?: CourseStatus,
     @Query('instructorId') instructorId?: string,
+    @Req() req?: any,
   ) {
-    return this.coursesService.findAll({ status, instructorId });
+    const role: string | undefined = req?.user?.role;
+    return this.coursesService.findAll({ status, instructorId }, role);
   }
 
   // Must be declared BEFORE `:id` to prevent NestJS routing "my" as an id param
@@ -88,39 +71,24 @@ export class CoursesController {
 
   /**
    * POST /courses/:id/image
-   * Upload (or replace) the cover image for a course.
-   * Returns { imageUrl } — the public URL stored on the course record.
+   * Save a pre-uploaded cover image URL on the course record.
+   * The client uploads the file via POST /storage/upload first to get the URL,
+   * then calls this endpoint with { imageUrl } to persist it.
+   * Returns { imageUrl }.
    */
   @Post(':id/image')
-  @UseInterceptors(
-    FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
-  )
-  async uploadImage(
+  async updateImage(
     @Param('id') id: string,
-    @UploadedFile() file: MulterFile,
+    @Body('imageUrl') imageUrl: string,
     @Req() req: any,
   ) {
-    if (!file) throw new BadRequestException('No file uploaded');
-    if (!file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Only image files are allowed');
-    }
-
-    const ext = extname(file.originalname).toLowerCase();
-    const key = `course-covers/${randomUUID()}${ext}`;
-
-    await this.storageService.upload(file.buffer, key, file.mimetype);
-    const imageUrl = await this.storageService.getSignedUrl(
-      key,
-      60 * 60 * 24 * 365,
-    );
-
+    if (!imageUrl) throw new BadRequestException('imageUrl is required');
     await this.coursesService.updateImageUrl(
       id,
       imageUrl,
       req.user.sub,
       req.user.role,
     );
-
     return { imageUrl };
   }
 

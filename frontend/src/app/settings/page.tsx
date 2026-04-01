@@ -44,7 +44,7 @@ function AvatarUpload() {
     setErrorMsg('')
     try {
       const res = await usersApi.uploadAvatar(file)
-      const updated: User = res.data
+      const updated: User = res.data?.data ?? res.data
       setUser(updated)
       setPreview(null)
       setStatus('success')
@@ -146,7 +146,7 @@ function CountrySelect() {
     setErrorMsg('')
     try {
       const res = await usersApi.updateMe(user.id, { country: selected || null })
-      const updated: User = res.data
+      const updated: User = res.data?.data ?? res.data
       setUser(updated)
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 3000)

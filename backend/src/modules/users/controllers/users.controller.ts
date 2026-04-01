@@ -102,6 +102,12 @@ export class UsersController {
     return new UserResponseDto(updated);
   }
 
+  /** PATCH /users/me — update the currently authenticated user's own profile. */
+  @Patch('me')
+  async updateMe(@Body() dto: UpdateUserDto, @CurrentUser() user: JwtPayload) {
+    return new UserResponseDto(await this.usersService.update(user.sub, dto, user.sub));
+  }
+
   @Patch(':id')
   async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto, @CurrentUser() user: JwtPayload) {
     if (user.sub !== id && user.role !== Role.ADMIN) throw new Error('Access denied.');
