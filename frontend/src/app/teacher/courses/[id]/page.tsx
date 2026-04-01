@@ -721,11 +721,12 @@ function StudentRoster({
     queryKey: ['course-roster', courseId],
     queryFn: async () => {
       const res = await courseRosterApi.getByCourse(courseId)
-      return res.data ?? []
+      const raw = res.data?.data ?? res.data
+      return Array.isArray(raw) ? raw : []
     },
   })
 
-  const students = data ?? []
+  const students = Array.isArray(data) ? data : []
 
   const initials = (s: RosterStudent) =>
     `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase()
@@ -801,11 +802,12 @@ function StudentProgressGrid({ courseId }: { courseId: string }) {
     queryKey: ['student-progress', courseId],
     queryFn: async () => {
       const res = await progressApi.getStudentProgress(courseId)
-      return res.data.data ?? []
+      const raw = res.data?.data ?? res.data
+      return Array.isArray(raw) ? raw : (raw?.students ?? [])
     },
   })
 
-  const students = data ?? []
+  const students = Array.isArray(data) ? data : []
 
   const initials = (s: StudentProgressItem) =>
     `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase()

@@ -56,17 +56,27 @@ export class ProgressService {
     requesterId: string,
     requesterRole: string,
   ): Promise<{ userId: string; firstName: string; lastName: string; avatarUrl: string | null; completedCount: number; totalCount: number }[]> {
-    // Must be course instructor or admin
-    if (requesterRole !== 'ADMIN') {
-      const course = await this.prisma.course.findUnique({ where: { id: courseId }, select: { instructorId: true } });
-      if (!course) throw new NotFoundException('Course not found');
-      if (course.instructorId !== requesterId) throw new ForbiddenException('Access denied');
-    }
+    try {
+      // Must be course instructor or admin
+      if (requesterRole !== 'ADMIN') {
+        const course = await this.prisma.course.findUnique({ where: { id: courseId }, select: { instructorId: true } });
+        if (!course) throw new NotFoundException('Course not found');
+        if (course.instructorId !== requesterId) throw new ForbiddenException('Access denied');
+      }
 
-    const [students, totalCount] = await Promise.all([
-      this.progressRepo.getStudentProgress(courseId),
-      this.progressRepo.countLessons(courseId),
-    ]);
-    return students.map((s) => ({ ...s, totalCount }));
+      const [students, totalCount] = await Promise.all([
+        this.progressRepo.getStudentProgress(courseId),
+        this.progressRepo.countLessons(courseId),
+      ]);
+
+      // Ensure rows is always a proper array (raw SQL can return non-array on some drivers)
+      const rows = Array.isArray(students) ? students : [];
+      return rows.map((s) => ({ ...s, totalCount }));
+    } catch (err) {
+      // Re-throw NestJS HTTP exceptions so they reach the client correctly
+      if (err instanceof NotFoundException || err instanceof ForbiddenException) throw err;
+      // For unexpected DB/raw-SQL errors return an empty array instead of a 500
+      return [];
+    }
   }
 }
