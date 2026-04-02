@@ -798,7 +798,12 @@ function StudentRoster({
 // ── StudentProgressGrid ────────────────────────────────────────────────────────
 
 function StudentProgressGrid({ courseId }: { courseId: string }) {
-  const { data, isLoading } = useQuery<StudentProgressItem[]>({
+  const queryClient = useQueryClient()
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null)
+  const [togglingCell, setTogglingCell] = useState<string | null>(null) // `${userId}:${lessonId}`
+
+  // Fetch student progress (includes completedLessonIds per student)
+  const { data, isLoading: progressLoading } = useQuery<StudentProgressItem[]>({
     queryKey: ['student-progress', courseId],
     queryFn: async () => {
       const res = await progressApi.getStudentProgress(courseId)
@@ -807,16 +812,80 @@ function StudentProgressGrid({ courseId }: { courseId: string }) {
     },
   })
 
+  // Fetch all modules for this course, then fetch lessons per module
+  const { data: modulesData } = useQuery<CourseModule[]>({
+    queryKey: ['course-modules', courseId],
+    queryFn: async () => {
+      const res = await coursesApi.getModules(courseId)
+      return res.data?.data ?? res.data ?? []
+    },
+  })
+  const modules: CourseModule[] = modulesData ?? []
+
+  // Fetch lessons for each module and flatten into a single ordered list
+  const { data: allLessons = [] } = useQuery<Lesson[]>({
+    queryKey: ['course-all-lessons', courseId, modules.map((m) => m.id).join(',')],
+    enabled: modules.length > 0,
+    queryFn: async () => {
+      const results = await Promise.all(
+        modules.map((m) =>
+          coursesApi.getLessons(courseId, m.id).then((res) => {
+            const lessons: Lesson[] = res.data?.data ?? res.data ?? []
+            return lessons
+          }),
+        ),
+      )
+      return results.flat().sort((a, b) => a.order - b.order)
+    },
+  })
+
   const students = Array.isArray(data) ? data : []
+  const isLoading = progressLoading
 
   const initials = (s: StudentProgressItem) =>
     `${s.firstName[0] ?? ''}${s.lastName[0] ?? ''}`.toUpperCase()
+
+  // Toggle a lesson's completion for a student
+  async function handleToggleLesson(studentId: string, lessonId: string, currentlyCompleted: boolean) {
+    const cellKey = `${studentId}:${lessonId}`
+    if (togglingCell === cellKey) return
+    setTogglingCell(cellKey)
+    try {
+      await progressApi.setStudentLessonProgress(lessonId, studentId, !currentlyCompleted)
+      // Optimistically update the cache
+      queryClient.setQueryData<StudentProgressItem[]>(
+        ['student-progress', courseId],
+        (prev) => {
+          if (!prev) return prev
+          return prev.map((s) => {
+            if (s.userId !== studentId) return s
+            const ids = s.completedLessonIds ?? []
+            const newIds = !currentlyCompleted
+              ? [...ids, lessonId]
+              : ids.filter((id) => id !== lessonId)
+            return {
+              ...s,
+              completedLessonIds: newIds,
+              completedCount: newIds.length,
+            }
+          })
+        },
+      )
+    } catch {
+      toast.error('Не удалось обновить прогресс')
+    } finally {
+      setTogglingCell(null)
+    }
+  }
 
   return (
     <div className="mt-6 pt-5 border-t border-gray-200 space-y-4">
       <div className="flex items-center gap-2">
         <BarChart2 className="h-4 w-4 text-indigo-500" />
         <h2 className="text-base font-semibold">Прогресс студентов</h2>
+        {allLessons.length > 0 && (
+          <span className="text-xs text-gray-400 ml-1">— нажмите на студента, чтобы редактировать уроки</span>
+        )}
       </div>
 
       {isLoading ? (
@@ -830,42 +899,87 @@ function StudentProgressGrid({ courseId }: { courseId: string }) {
       ) : (
         <div className="space-y-2">
           {students.map((s) => {
-            const pct = s.totalCount > 0 ? Math.round((s.completedCount / s.totalCount) * 100) : 0
+            const completedIds = new Set(s.completedLessonIds ?? [])
+            const pct = s.totalCount > 0 ? Math.round((completedIds.size / s.totalCount) * 100) : 0
+            const isExpanded = expandedStudentId === s.userId
+
             return (
               <div
                 key={s.userId}
-                className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 shadow-sm"
+                className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden"
               >
-                {/* Avatar */}
-                <div className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0">
-                  {s.avatarUrl ? (
-                    <img src={s.avatarUrl} alt={s.firstName} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xs font-bold text-indigo-600">{initials(s)}</span>
-                  )}
-                </div>
-                {/* Name */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {s.firstName} {s.lastName}
-                  </p>
-                  {/* Progress bar */}
-                  <div className="mt-1 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 rounded-full transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-500 shrink-0 w-20 text-right">
-                      {s.completedCount} / {s.totalCount} уроков
-                    </span>
+                {/* Summary row — click to expand */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedStudentId(isExpanded ? null : s.userId)}
+                  className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
+                >
+                  {/* Avatar */}
+                  <div className="w-9 h-9 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0">
+                    {s.avatarUrl ? (
+                      <img src={s.avatarUrl} alt={s.firstName} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs font-bold text-indigo-600">{initials(s)}</span>
+                    )}
                   </div>
-                </div>
-                {/* Percentage badge */}
-                <span className={`shrink-0 text-sm font-semibold w-12 text-right ${pct === 100 ? 'text-green-600' : 'text-indigo-600'}`}>
-                  {pct}%
-                </span>
+                  {/* Name + progress bar */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {s.firstName} {s.lastName}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-500 shrink-0 w-20 text-right">
+                        {completedIds.size} / {s.totalCount} уроков
+                      </span>
+                    </div>
+                  </div>
+                  {/* Percentage + chevron */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`text-sm font-semibold w-10 text-right ${pct === 100 ? 'text-green-600' : 'text-indigo-600'}`}>
+                      {pct}%
+                    </span>
+                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                  </div>
+                </button>
+
+                {/* Expanded lesson grid */}
+                {isExpanded && allLessons.length > 0 && (
+                  <div className="border-t border-gray-100 px-3 pb-3 pt-2">
+                    <p className="text-xs text-gray-400 mb-2">Уроки — нажмите на ячейку для изменения статуса</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {allLessons.map((lesson, idx) => {
+                        const completed = completedIds.has(lesson.id)
+                        const cellKey = `${s.userId}:${lesson.id}`
+                        const isToggling = togglingCell === cellKey
+                        return (
+                          <button
+                            key={lesson.id}
+                            type="button"
+                            disabled={isToggling}
+                            onClick={() => handleToggleLesson(s.userId, lesson.id, completed)}
+                            title={`Урок ${idx + 1}: ${lesson.title}`}
+                            className={`
+                              w-8 h-8 rounded-md text-xs font-semibold border transition-all
+                              flex items-center justify-center
+                              ${completed
+                                ? 'bg-green-500 border-green-600 text-white hover:bg-green-600'
+                                : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-indigo-300 hover:text-indigo-500'}
+                              ${isToggling ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                            `}
+                          >
+                            {idx + 1}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}

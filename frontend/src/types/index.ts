@@ -161,6 +161,7 @@ export interface StudentProgressItem {
   avatarUrl: string | null
   completedCount: number
   totalCount: number
+  completedLessonIds: string[]
 }
 
 export interface ApiResponse<T> {

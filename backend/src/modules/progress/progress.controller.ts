@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Body,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -18,13 +19,34 @@ import { JwtPayload } from '../auth/strategies/jwt.strategy';
 export class ProgressController {
   constructor(private readonly progressService: ProgressService) {}
 
-  /** POST /progress/lesson/:lessonId — mark lesson completed */
+  /**
+   * POST /progress/lesson/:lessonId — mark lesson completed.
+   * Teachers/admins can pass { userId, completed } in body to update a student's progress.
+   */
   @Post('lesson/:lessonId')
   @HttpCode(HttpStatus.OK)
   completeLesson(
     @Param('lessonId') lessonId: string,
+    @Body() body: { userId?: string; completed?: boolean },
     @CurrentUser() user: JwtPayload,
   ) {
+    const isTeacherOrAdmin = user.role === 'TEACHER' || user.role === 'ADMIN';
+
+    // If a teacher/admin provides a target userId, delegate to the teacher method
+    if (isTeacherOrAdmin && body?.userId && body.userId !== user.sub) {
+      return this.progressService.setLessonProgressAsTeacher(
+        user.sub,
+        user.role,
+        lessonId,
+        body.userId,
+        body.completed !== false, // default to true if not specified
+      );
+    }
+
+    // Standard student flow (or teacher marking their own)
+    if (body?.completed === false) {
+      return this.progressService.uncompleteLesson(user.sub, lessonId);
+    }
     return this.progressService.completeLesson(user.sub, lessonId);
   }
 

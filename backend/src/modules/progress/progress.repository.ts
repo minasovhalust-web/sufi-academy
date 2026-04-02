@@ -59,13 +59,13 @@ export class ProgressRepository {
 
   /**
    * Get per-student progress for a course (teacher view).
-   * Returns rows: { userId, firstName, lastName, avatarUrl, completedCount }
+   * Returns rows: { userId, firstName, lastName, avatarUrl, completedCount, completedLessonIds }
    */
   async getStudentProgress(
     courseId: string,
-  ): Promise<{ userId: string; firstName: string; lastName: string; avatarUrl: string | null; completedCount: number }[]> {
+  ): Promise<{ userId: string; firstName: string; lastName: string; avatarUrl: string | null; completedCount: number; completedLessonIds: string[] }[]> {
     const rows = await this.prisma.$queryRaw<
-      { userId: string; firstName: string; lastName: string; avatarUrl: string | null; completedCount: bigint }[]
+      { userId: string; firstName: string; lastName: string; avatarUrl: string | null; completedCount: bigint; completedLessonIds: string[] | null }[]
     >(
       Prisma.sql`
         SELECT
@@ -73,7 +73,8 @@ export class ProgressRepository {
           u."firstName",
           u."lastName",
           u."avatarUrl",
-          COUNT(lp."id") AS "completedCount"
+          COUNT(lp."id") AS "completedCount",
+          COALESCE(ARRAY_AGG(lp."lessonId") FILTER (WHERE lp."lessonId" IS NOT NULL), '{}') AS "completedLessonIds"
         FROM "enrollments" e
         JOIN "users" u ON u."id" = e."userId"
         LEFT JOIN "lesson_progress" lp ON lp."userId" = e."userId" AND lp."courseId" = ${courseId}
@@ -82,7 +83,11 @@ export class ProgressRepository {
         ORDER BY u."firstName", u."lastName"
       `,
     );
-    return rows.map((r) => ({ ...r, completedCount: Number(r.completedCount) }));
+    return rows.map((r) => ({
+      ...r,
+      completedCount: Number(r.completedCount),
+      completedLessonIds: Array.isArray(r.completedLessonIds) ? r.completedLessonIds : [],
+    }));
   }
 
   /** Count total lessons in a course. */

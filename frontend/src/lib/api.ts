@@ -281,6 +281,12 @@ export const progressApi = {
   getCourseProgress: (courseId: string) => apiClient.get(`/progress/course/${courseId}`),
   /** Get per-student progress for a course (teacher/admin). */
   getStudentProgress: (courseId: string) => apiClient.get(`/progress/course/${courseId}/students`),
+  /**
+   * Teacher/admin: set a student's lesson completion status.
+   * Sends POST /progress/lesson/:lessonId with { userId, completed } in body.
+   */
+  setStudentLessonProgress: (lessonId: string, userId: string, completed: boolean) =>
+    apiClient.post(`/progress/lesson/${lessonId}`, { userId, completed }),
 }
 
 // Schedule API
