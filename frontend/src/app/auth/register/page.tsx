@@ -57,7 +57,7 @@ export default function RegisterPage() {
       },
       {
         onSuccess: () => {
-          router.push('/dashboard')
+          router.push('/auth/verify-email?email=' + encodeURIComponent(data.email))
         },
       }
     )
