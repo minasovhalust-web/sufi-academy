@@ -90,7 +90,6 @@ export function Navbar() {
                   </button>
                   <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                     <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Личный кабинет</Link>
-                    <Link href="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Настройки</Link>
                   </div>
                 </div>
                 <button
