@@ -70,28 +70,26 @@ export function Navbar() {
                 >
                   <MessageSquare className="h-5 w-5" />
                 </Link>
-                {/* Avatar + name → dropdown menu */}
-                <div className="relative group">
-                  <button className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0 ring-1 ring-gray-200">
-                      {user?.avatarUrl ? (
-                        <img
-                          src={user.avatarUrl}
-                          alt={user.firstName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-[10px] font-bold text-indigo-600 leading-none select-none">
-                          {getInitials(user?.firstName ?? '', user?.lastName ?? '')}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-sm font-medium text-gray-700">{user?.firstName}</span>
-                  </button>
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Личный кабинет</Link>
+                {/* Avatar + name → dashboard */}
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0 ring-1 ring-gray-200">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.firstName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10px] font-bold text-indigo-600 leading-none select-none">
+                        {getInitials(user?.firstName ?? '', user?.lastName ?? '')}
+                      </span>
+                    )}
                   </div>
-                </div>
+                  <span className="text-sm font-medium text-gray-700">{user?.firstName}</span>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="text-sm px-3 py-1.5 border rounded-md hover:bg-gray-50"
