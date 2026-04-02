@@ -9,8 +9,8 @@
   "/learn/[courseId]/page": "app/learn/[courseId]/page.js",
   "/live/[sessionId]/page": "app/live/[sessionId]/page.js",
   "/messages/[userId]/page": "app/messages/[userId]/page.js",
-  "/messages/page": "app/messages/page.js",
   "/page": "app/page.js",
+  "/messages/page": "app/messages/page.js",
   "/settings/page": "app/settings/page.js",
   "/teacher/courses/[id]/page": "app/teacher/courses/[id]/page.js",
   "/teacher/page": "app/teacher/page.js"
