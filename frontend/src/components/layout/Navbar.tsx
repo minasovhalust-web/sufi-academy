@@ -30,7 +30,7 @@ export function Navbar() {
     { label: 'Курсы', href: '/courses' },
   ]
 
-  if (isAuthenticated) navLinks.push({ label: 'Личный кабинет', href: '/dashboard' })
+  
   if (isTeacher && isTeacher()) navLinks.push({ label: 'Преподаватель', href: '/teacher' })
   if (isAdmin && isAdmin()) navLinks.push({ label: 'Администрация', href: '/admin' })
 
