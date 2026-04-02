@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ProgressRepository } from './progress.repository';
 
@@ -43,11 +43,23 @@ export class ProgressService {
     userId: string,
     courseId: string,
   ): Promise<{ completedLessonIds: string[]; completedCount: number; totalCount: number }> {
-    const [completedLessonIds, totalCount] = await Promise.all([
-      this.progressRepo.getCompletedLessonIds(userId, courseId),
-      this.progressRepo.countLessons(courseId),
-    ]);
-    return { completedLessonIds, completedCount: completedLessonIds.length, totalCount };
+    try {
+      const [completedLessonIds, totalCount] = await Promise.all([
+        this.progressRepo.getCompletedLessonIds(userId, courseId),
+        this.progressRepo.countLessons(courseId),
+      ]);
+      return { completedLessonIds, completedCount: completedLessonIds.length, totalCount };
+    } catch (err) {
+      // If the lesson_progress table does not exist yet (migration not applied),
+      // return zeros instead of crashing with a 500.
+      console.error('[ProgressService] getCourseProgress error:', (err as Error).message);
+      try {
+        const totalCount = await this.progressRepo.countLessons(courseId);
+        return { completedLessonIds: [], completedCount: 0, totalCount };
+      } catch {
+        return { completedLessonIds: [], completedCount: 0, totalCount: 0 };
+      }
+    }
   }
 
   /**

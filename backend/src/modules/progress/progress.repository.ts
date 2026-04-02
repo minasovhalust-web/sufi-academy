@@ -4,11 +4,11 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 /**
- * ProgressRepository — raw-SQL only.
+ * ProgressRepository — raw-SQL based.
  *
- * The "lesson_progress" table was added after the last `prisma generate`
- * run, so the generated Prisma Client does not know about it. All queries
- * use $queryRaw / $executeRaw with Prisma.sql tagged templates.
+ * The "lesson_progress" table is defined in the Prisma schema (LessonProgress model).
+ * Queries use $queryRaw / $executeRaw with Prisma.sql tagged templates.
+ * Make sure to run `npx prisma migrate deploy` on the server after deployment.
  */
 
 export interface RawLessonProgress {
