@@ -98,6 +98,11 @@ model User {
   specialization String?
   country        String?
 
+  // Email verification
+  isEmailVerified         Boolean   @default(false)
+  verificationCode        String?
+  verificationCodeExpiresAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

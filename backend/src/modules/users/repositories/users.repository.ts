@@ -44,6 +44,7 @@ export class UsersRepository {
     country?: string | null;
     createdAt: Date;
     updatedAt: Date;
+    [key: string]: unknown; // allow extra columns not yet in generated types
   }): UserEntity {
     return new UserEntity({
       id: prismaUser.id,
@@ -57,6 +58,9 @@ export class UsersRepository {
       bio: prismaUser.bio,
       specialization: prismaUser.specialization,
       country: prismaUser.country,
+      isEmailVerified: (prismaUser.isEmailVerified as boolean) ?? false,
+      verificationCode: (prismaUser.verificationCode as string | null) ?? null,
+      verificationCodeExpiresAt: (prismaUser.verificationCodeExpiresAt as Date | null) ?? null,
       createdAt: prismaUser.createdAt,
       updatedAt: prismaUser.updatedAt,
     });
@@ -66,20 +70,55 @@ export class UsersRepository {
     dto: CreateUserDto & { hashedPassword: string },
   ): Promise<UserEntity> {
     try {
-      const user = await this.prisma.user.create({
-        data: {
-          email: dto.email.toLowerCase().trim(),
-          password: dto.hashedPassword,
-          firstName: dto.firstName.trim(),
-          lastName: dto.lastName.trim(),
-          role: dto.role ?? Role.STUDENT,
-        },
-      });
+      // Cast data as `any` because the Prisma-generated types don't yet know
+      // about isEmailVerified / verificationCode / verificationCodeExpiresAt
+      // (prisma generate requires network access which is unavailable here).
+      const data: Record<string, unknown> = {
+        email: dto.email.toLowerCase().trim(),
+        password: dto.hashedPassword,
+        firstName: dto.firstName.trim(),
+        lastName: dto.lastName.trim(),
+        role: dto.role ?? Role.STUDENT,
+        isEmailVerified: dto.isEmailVerified ?? false,
+        verificationCode: dto.verificationCode ?? null,
+        verificationCodeExpiresAt: dto.verificationCodeExpiresAt ?? null,
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user = await (this.prisma.user.create as any)({ data });
       return this.mapToEntity(user);
     } catch (error: unknown) {
       this.logger.error('Failed to create user', error);
       throw new InternalServerErrorException('Could not create user.');
     }
+  }
+
+  /**
+   * Updates email-verification related fields for a user.
+   */
+  async updateVerification(
+    id: string,
+    data: {
+      isEmailVerified?: boolean;
+      verificationCode?: string | null;
+      verificationCodeExpiresAt?: Date | null;
+    },
+  ): Promise<UserEntity> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const user = await (this.prisma.user.update as any)({
+      where: { id },
+      data,
+    });
+    return this.mapToEntity(user);
+  }
+
+  /**
+   * Find a user whose verificationCode matches the given code.
+   */
+  async findByVerificationCode(email: string): Promise<UserEntity | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+    return user ? this.mapToEntity(user) : null;
   }
 
   async findById(id: string): Promise<UserEntity | null> {

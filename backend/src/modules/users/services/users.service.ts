@@ -179,6 +179,28 @@ export class UsersService {
   }
 
   /**
+   * Updates email-verification fields for a user.
+   * Called by AuthService during verification flow.
+   */
+  async updateVerificationStatus(
+    id: string,
+    data: {
+      isEmailVerified?: boolean;
+      verificationCode?: string | null;
+      verificationCodeExpiresAt?: Date | null;
+    },
+  ): Promise<UserEntity> {
+    return this.usersRepository.updateVerification(id, data);
+  }
+
+  /**
+   * Look up a user by email for verification purposes (includes verification fields).
+   */
+  async findByEmailForVerification(email: string): Promise<UserEntity | null> {
+    return this.usersRepository.findByVerificationCode(email);
+  }
+
+  /**
    * Validates a user's credentials during login.
    * Used exclusively by AuthService.
    * Returns the user if valid, null otherwise.

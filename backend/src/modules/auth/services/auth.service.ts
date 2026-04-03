@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../../users/services/users.service';
@@ -10,6 +11,7 @@ import { RegisterDto } from '../dto/auth.dto';
 import { UserEntity } from '../../users/entities/user.entity';
 import { Role } from '../../../common/enums/role.enum';
 import { JwtPayload } from '../strategies/jwt.strategy';
+import { EmailService } from '../../email/email.service';
 
 /**
  * Token pair returned on successful login or refresh.
@@ -44,25 +46,100 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly authTokenRepository: AuthTokenRepository,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
    * Registers a new student account.
-   * Role is always STUDENT — cannot be overridden via public registration.
+   * Generates a 6-digit verification code, saves it, sends email, and returns
+   * { message } instead of tokens — the user must verify email first.
    */
   async register(
     dto: RegisterDto,
-    meta?: { userAgent?: string; ipAddress?: string },
-  ): Promise<{ user: UserEntity; tokens: TokenPair }> {
-    const user = await this.usersService.create({
+    _meta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ message: string }> {
+    const code = this.generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await this.usersService.create({
       ...dto,
-      role: Role.STUDENT, // Hardcoded — public registration is always STUDENT
+      role: Role.STUDENT,
+      isEmailVerified: false,
+      verificationCode: code,
+      verificationCodeExpiresAt: expiresAt,
     });
 
-    const tokens = await this.generateAndStoreTokens(user, meta);
+    await this.emailService.sendVerificationCode(dto.email, code);
 
-    this.logger.log(`New student registered: ${user.id}`);
-    return { user, tokens };
+    this.logger.log(`Verification code sent to: ${dto.email}`);
+    return { message: 'Verification code sent to your email. Please verify to continue.' };
+  }
+
+  /**
+   * Verifies the user's email with the 6-digit code.
+   * On success, marks the user as verified and returns a token pair.
+   */
+  async verifyEmail(
+    email: string,
+    code: string,
+    meta?: { userAgent?: string; ipAddress?: string },
+  ): Promise<{ user: UserEntity; tokens: TokenPair }> {
+    const user = await this.usersService.findByEmailForVerification(email);
+
+    if (!user) {
+      throw new BadRequestException('User not found.');
+    }
+    if (user.isEmailVerified) {
+      throw new BadRequestException('Email is already verified.');
+    }
+    if (!user.verificationCode || user.verificationCode !== code) {
+      throw new BadRequestException('Invalid verification code.');
+    }
+    if (user.verificationCodeExpiresAt && user.verificationCodeExpiresAt < new Date()) {
+      throw new BadRequestException('Verification code has expired. Please request a new one.');
+    }
+
+    const verified = await this.usersService.updateVerificationStatus(user.id, {
+      isEmailVerified: true,
+      verificationCode: null,
+      verificationCodeExpiresAt: null,
+    });
+
+    const tokens = await this.generateAndStoreTokens(verified, meta);
+    this.logger.log(`Email verified for user: ${user.id}`);
+    return { user: verified, tokens };
+  }
+
+  /**
+   * Resends a new verification code to the given email.
+   */
+  async resendVerificationCode(email: string): Promise<{ message: string }> {
+    const user = await this.usersService.findByEmailForVerification(email);
+
+    if (!user) {
+      // Don't reveal whether the email exists
+      return { message: 'If that email is registered, a new code has been sent.' };
+    }
+    if (user.isEmailVerified) {
+      throw new BadRequestException('Email is already verified.');
+    }
+
+    const code = this.generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await this.usersService.updateVerificationStatus(user.id, {
+      verificationCode: code,
+      verificationCodeExpiresAt: expiresAt,
+    });
+
+    await this.emailService.sendVerificationCode(email, code);
+    this.logger.log(`Verification code resent to: ${email}`);
+    return { message: 'If that email is registered, a new code has been sent.' };
+  }
+
+  /** Generates a random 6-digit numeric verification code. */
+  private generateVerificationCode(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
   /**

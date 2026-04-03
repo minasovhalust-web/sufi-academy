@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsDate, IsEmail, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Role } from '../../../common/enums/role.enum';
 
 export class UpdateUserDto {
@@ -8,4 +8,7 @@ export class UpdateUserDto {
   @IsEnum(Role) @IsOptional() role?: Role;
   @IsBoolean() @IsOptional() isActive?: boolean;
   @IsString() @IsOptional() @MaxLength(100) country?: string;
+  @IsBoolean() @IsOptional() isEmailVerified?: boolean;
+  @IsString() @IsOptional() verificationCode?: string;
+  @IsDate() @IsOptional() verificationCodeExpiresAt?: Date;
 }

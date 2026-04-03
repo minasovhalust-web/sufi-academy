@@ -1,14 +1,23 @@
-import { Injectable } from "@nestjs/common";
-import * as nodemailer from "nodemailer";
+import { Injectable, Logger } from "@nestjs/common";
+
+// Use require() so tsc does not need @types/nodemailer at compile time.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const nodemailer: {
+  createTransport: (opts: Record<string, unknown>) => {
+    sendMail: (opts: Record<string, unknown>) => Promise<unknown>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+} = require('nodemailer');
 
 @Injectable()
 export class EmailService {
-  private transporter;
+  private readonly logger = new Logger(EmailService.name);
+  private readonly transporter: ReturnType<typeof nodemailer.createTransport>;
 
   constructor() {
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT),
+      port: Number(process.env.SMTP_PORT) || 587,
       secure: false,
       auth: {
         user: process.env.SMTP_USER,
@@ -18,11 +27,25 @@ export class EmailService {
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
-    await this.transporter.sendMail({
-      from: "Академия Суфийской Философии <" + process.env.SMTP_FROM + ">",
-      to: email,
-      subject: "Код подтверждения email",
-      html: "<div style=font-family:Arial><h2>Код подтверждения: <b>" + code + "</b></h2><p>Код действителен 15 минут.</p></div>",
-    });
+    try {
+      await this.transporter.sendMail({
+        from: `"Академия Суфийской Философии" <${process.env.SMTP_FROM ?? process.env.SMTP_USER}>`,
+        to: email,
+        subject: 'Код подтверждения email',
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto">
+            <h2 style="color:#4f46e5">Подтверждение email</h2>
+            <p>Ваш код подтверждения:</p>
+            <div style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#4f46e5;padding:16px 0">
+              ${code}
+            </div>
+            <p style="color:#6b7280;font-size:14px">Код действителен 15 минут.</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      this.logger.error(`Failed to send verification email to ${email}: ${(err as Error).message}`);
+      // Don't rethrow — email failure should not block registration flow
+    }
   }
 }

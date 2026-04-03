@@ -12,6 +12,10 @@ export class UserEntity {
   bio?: string | null;
   specialization?: string | null;
   country?: string | null;
+  // Email verification
+  isEmailVerified?: boolean;
+  verificationCode?: string | null;
+  verificationCodeExpiresAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   constructor(partial: Partial<UserEntity>) { Object.assign(this, partial); }
