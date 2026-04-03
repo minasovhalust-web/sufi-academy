@@ -172,6 +172,13 @@ export function Navbar() {
                   </div>
                 </Link>
                 <Link
+                  href="/dashboard"
+                  className="flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Личный кабинет
+                </Link>
+                <Link
                   href="/messages"
                   className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
