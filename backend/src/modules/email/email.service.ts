@@ -27,6 +27,8 @@ export class EmailService {
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
+    console.log(`[EmailService] Sending verification code to ${email}, code: ${code}`);
+    this.logger.log(`Sending verification code ${code} to ${email}`);
     try {
       await this.transporter.sendMail({
         from: `"Академия Суфийской Философии" <${process.env.SMTP_FROM ?? process.env.SMTP_USER}>`,
@@ -43,7 +45,10 @@ export class EmailService {
           </div>
         `,
       });
+      console.log(`[EmailService] Email sent successfully to ${email}`);
     } catch (err) {
+      console.error(`[EmailService] FAILED to send email to ${email}:`, (err as Error).message);
+      console.error(`[EmailService] SMTP config — host: ${process.env.SMTP_HOST}, port: ${process.env.SMTP_PORT}, user: ${process.env.SMTP_USER}`);
       this.logger.error(`Failed to send verification email to ${email}: ${(err as Error).message}`);
       // Don't rethrow — email failure should not block registration flow
     }

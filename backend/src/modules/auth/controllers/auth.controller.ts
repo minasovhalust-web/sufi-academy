@@ -26,11 +26,8 @@ export class AuthController {
   @Public()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() dto: RegisterDto, @Req() req: Request) {
-    return this.authService.register(dto, {
-      userAgent: req.headers['user-agent'],
-      ipAddress: req.ip,
-    });
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
   /**

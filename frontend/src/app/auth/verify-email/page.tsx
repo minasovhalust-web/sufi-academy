@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api'
+import { useAuthStore } from '@/store/auth.store'
 
 function VerifyEmailForm() {
   const router = useRouter()
@@ -12,6 +13,7 @@ function VerifyEmailForm() {
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const [resendTimer, setResendTimer] = useState(60)
+  const setAuth = useAuthStore((state) => state.setAuth)
 
   useEffect(() => {
     if (resendTimer > 0) {
@@ -25,9 +27,17 @@ function VerifyEmailForm() {
     setLoading(true)
     setError('')
     try {
-      await apiClient.post('/auth/verify-email', { email, code })
-      setSuccess('Email подтверждён! Перенаправляем...')
-      setTimeout(() => router.push('/auth/login'), 2000)
+      const response = await apiClient.post('/auth/verify-email', { email, code })
+      // Backend returns { user, accessToken, refreshToken } on success
+      const data = response.data?.data ?? response.data
+      if (data?.user && data?.accessToken) {
+        setAuth(data.user, { accessToken: data.accessToken, refreshToken: data.refreshToken })
+        setSuccess('Email подтверждён! Входим в аккаунт...')
+        setTimeout(() => router.push('/dashboard'), 1500)
+      } else {
+        setSuccess('Email подтверждён! Перенаправляем...')
+        setTimeout(() => router.push('/auth/login'), 1500)
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Неверный код')
     } finally {
