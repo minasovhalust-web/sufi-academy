@@ -286,7 +286,7 @@ function UpcomingLessons() {
               <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.courseTitle}</p>
             )}
           </div>
-          <Button asChild size="sm" variant="outline" className="flex-shrink-0 self-center gap-1">
+          <Button asChild size="sm" variant="outline" className="flex-shrink-0 self-center gap-1 min-h-[44px] px-4">
             <Link href={`/learn/${lesson.courseId}`}>
               Перейти
               <ChevronRight className="h-3.5 w-3.5" />
@@ -493,11 +493,11 @@ export default function DashboardPage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50">
-        <div className="container-base py-10">
+        <div className="container-base py-6 sm:py-10">
 
           {/* Greeting */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">
+          <div className="mb-5 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
               Добро пожаловать, {user?.firstName}!
             </h1>
             <p className="text-gray-500 text-sm">
@@ -507,12 +507,12 @@ export default function DashboardPage() {
 
           {/* Tabs: Обучение / Профиль */}
           <Tabs defaultValue="learning" className="w-full">
-            <TabsList className="mb-8">
-              <TabsTrigger value="learning" className="gap-2">
+            <TabsList className="mb-6 sm:mb-8 w-full sm:w-auto">
+              <TabsTrigger value="learning" className="gap-2 flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
                 <BookOpen className="h-4 w-4" />
                 Обучение
               </TabsTrigger>
-              <TabsTrigger value="profile" className="gap-2">
+              <TabsTrigger value="profile" className="gap-2 flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
                 <Settings className="h-4 w-4" />
                 Настройки профиля
               </TabsTrigger>
@@ -521,7 +521,7 @@ export default function DashboardPage() {
             {/* ── Tab: Обучение ── */}
             <TabsContent value="learning">
               {/* Stats row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 sm:mb-10">
                 <Card className="shadow-sm border-gray-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
@@ -560,10 +560,10 @@ export default function DashboardPage() {
               </div>
 
               {/* Мои курсы */}
-              <section className="mb-10">
-                <div className="flex items-center gap-2 mb-5">
+              <section className="mb-6 sm:mb-10">
+                <div className="flex items-center gap-2 mb-4 sm:mb-5">
                   <BookOpen className="h-5 w-5 text-indigo-600" />
-                  <h2 className="text-xl font-bold text-gray-900">Мои курсы</h2>
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Мои курсы</h2>
                 </div>
 
                 {enrollmentsLoading ? (
@@ -588,7 +588,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-400 font-medium mb-3">
                       Вы ещё не записались ни на один курс
                     </p>
-                    <Button asChild variant="outline" size="sm">
+                    <Button asChild variant="outline" className="min-h-[44px] px-6">
                       <Link href="/courses">Посмотреть курсы</Link>
                     </Button>
                   </div>
@@ -596,19 +596,19 @@ export default function DashboardPage() {
               </section>
 
               {/* Предстоящие занятия */}
-              <section className="mb-10">
-                <div className="flex items-center gap-2 mb-5">
+              <section className="mb-6 sm:mb-10">
+                <div className="flex items-center gap-2 mb-4 sm:mb-5">
                   <CalendarDays className="h-5 w-5 text-indigo-600" />
-                  <h2 className="text-xl font-bold text-gray-900">Предстоящие занятия</h2>
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Предстоящие занятия</h2>
                 </div>
                 <UpcomingLessons />
               </section>
 
               {/* Уведомления */}
               <section>
-                <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 mb-4 sm:mb-5">
                   <Bell className="h-5 w-5 text-indigo-600" />
-                  <h2 className="text-xl font-bold text-gray-900">Уведомления</h2>
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Уведомления</h2>
                 </div>
                 <NotificationsSection />
               </section>
