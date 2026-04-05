@@ -1,56 +1,42 @@
-import { Injectable, Logger } from "@nestjs/common";
-
-// Use require() so tsc does not need @types/nodemailer at compile time.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const nodemailer: {
-  createTransport: (opts: Record<string, unknown>) => {
-    sendMail: (opts: Record<string, unknown>) => Promise<unknown>;
-  };
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-} = require('nodemailer');
+import { Injectable } from "@nestjs/common";
+import * as https from "https";
 
 @Injectable()
 export class EmailService {
-  private readonly logger = new Logger(EmailService.name);
-  private readonly transporter: ReturnType<typeof nodemailer.createTransport>;
-
-  constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-  }
+  private readonly apiKey = process.env.RESEND_API_KEY;
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
-    console.log(`[EmailService] Sending verification code to ${email}, code: ${code}`);
-    this.logger.log(`Sending verification code ${code} to ${email}`);
-    try {
-      await this.transporter.sendMail({
-        from: `"Академия Суфийской Философии" <${process.env.SMTP_FROM ?? process.env.SMTP_USER}>`,
-        to: email,
-        subject: 'Код подтверждения email',
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto">
-            <h2 style="color:#4f46e5">Подтверждение email</h2>
-            <p>Ваш код подтверждения:</p>
-            <div style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#4f46e5;padding:16px 0">
-              ${code}
-            </div>
-            <p style="color:#6b7280;font-size:14px">Код действителен 15 минут.</p>
-          </div>
-        `,
+    const body = JSON.stringify({
+      from: "Академия Суфийской Философии <noreply@muzasufy.com>",
+      to: [email],
+      subject: "Код подтверждения email",
+      html: "<div style=\"font-family:Arial;max-width:600px;margin:0 auto;\"><h2 style=\"color:#4f46e5;\">Подтверждение email</h2><p>Ваш код подтверждения:</p><h1 style=\"color:#4f46e5;font-size:48px;letter-spacing:8px;\">" + code + "</h1><p>Код действителен в течение 15 минут.</p></div>",
+    });
+
+    return new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: "api.resend.com",
+        path: "/emails",
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + this.apiKey,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      }, (res) => {
+        let data = "";
+        res.on("data", (chunk) => data += chunk);
+        res.on("end", () => {
+          console.log("Email sent:", data);
+          resolve();
+        });
       });
-      console.log(`[EmailService] Email sent successfully to ${email}`);
-    } catch (err) {
-      console.error(`[EmailService] FAILED to send email to ${email}:`, (err as Error).message);
-      console.error(`[EmailService] SMTP config — host: ${process.env.SMTP_HOST}, port: ${process.env.SMTP_PORT}, user: ${process.env.SMTP_USER}`);
-      this.logger.error(`Failed to send verification email to ${email}: ${(err as Error).message}`);
-      // Don't rethrow — email failure should not block registration flow
-    }
+      req.on("error", (e) => {
+        console.error("Email error:", e.message);
+        resolve();
+      });
+      req.write(body);
+      req.end();
+    });
   }
 }
