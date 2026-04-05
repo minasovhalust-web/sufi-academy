@@ -17,12 +17,14 @@ export function EnrollmentCard({ enrollment, lessonProgress }: EnrollmentCardPro
 
   return (
     <Card className="overflow-hidden hover:shadow-md transition-shadow">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="line-clamp-1">{enrollment.course?.title}</CardTitle>
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="line-clamp-2 text-base sm:text-lg leading-snug">
+              {enrollment.course?.title}
+            </CardTitle>
             {enrollment.course?.instructor && (
-              <CardDescription>
+              <CardDescription className="mt-1">
                 {enrollment.course.instructor.firstName} {enrollment.course.instructor.lastName}
               </CardDescription>
             )}
@@ -35,18 +37,19 @@ export function EnrollmentCard({ enrollment, lessonProgress }: EnrollmentCardPro
                   ? 'default'
                   : 'destructive'
             }
+            className="shrink-0 text-xs"
           >
             {getEnrollmentStatusLabel(enrollment.status)}
           </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0 space-y-4">
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium">Прогресс</span>
             {haslp ? (
-              <span className="text-sm text-[var(--color-text-secondary)]">
+              <span className="text-xs sm:text-sm text-[var(--color-text-secondary)] whitespace-nowrap">
                 {lessonProgress.completedCount} из {lessonProgress.totalCount} уроков
               </span>
             ) : (
@@ -56,7 +59,7 @@ export function EnrollmentCard({ enrollment, lessonProgress }: EnrollmentCardPro
           <Progress value={haslp ? lpPct! : enrollment.progress} />
         </div>
 
-        <Button asChild className="w-full">
+        <Button asChild className="w-full min-h-[44px]">
           <Link href={`/learn/${enrollment.courseId}`}>
             {(haslp ? lpPct === 100 : enrollment.progress === 100) ? 'Пересмотреть' : 'Продолжить обучение'}
           </Link>

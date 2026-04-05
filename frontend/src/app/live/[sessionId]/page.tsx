@@ -51,7 +51,7 @@ interface SessionStatePayload {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000'
+const WS_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1').replace('/api/v1', '')
 
 // ── VideoTile ─────────────────────────────────────────────────────────────────
 
@@ -455,20 +455,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Derived data for rendering ────────────────────────────────────────────
 
   const participantList = Object.values(participants)
-  const hostParticipant = participantList.find((p) => p.role === 'HOST')
-  const studentParticipants = participantList.filter((p) => p.role === 'STUDENT')
 
-  // The "main" video shown large: host stream (or local if you are the host)
-  const hostUserId = hostParticipant?.userId
-  const hostStream =
-    hostUserId === user?.id ? localStream : (hostUserId ? remoteStreams[hostUserId] : null) ?? null
-
-  const hostName = hostParticipant
-    ? `${hostParticipant.firstName} ${hostParticipant.lastName}`
-    : 'Хост'
-
-  // Small tiles: students + local (if student), or students only (if host)
-  const smallTiles: Array<{
+  // Build all tiles: self always first, then remote participants
+  const allTiles: Array<{
     userId: string
     name: string
     stream: MediaStream | null
@@ -477,42 +466,38 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
     isLocal: boolean
   }> = []
 
-  if (isHost) {
-    // Host sees student tiles
-    for (const p of studentParticipants) {
-      smallTiles.push({
-        userId: p.userId,
-        name: `${p.firstName} ${p.lastName}`,
-        stream: remoteStreams[p.userId] ?? null,
-        micEnabled: p.micEnabled,
-        role: 'STUDENT',
-        isLocal: false,
-      })
-    }
-  } else {
-    // Student sees self + other students
-    if (user) {
-      const selfParticipant = participants[user.id]
-      smallTiles.push({
-        userId: user.id,
-        name: `${user.firstName} ${user.lastName}`,
-        stream: localStream,
-        micEnabled: selfParticipant?.micEnabled ?? isAudioEnabled,
-        role: 'STUDENT',
-        isLocal: true,
-      })
-    }
-    for (const p of studentParticipants) {
-      if (p.userId === user?.id) continue
-      smallTiles.push({
-        userId: p.userId,
-        name: `${p.firstName} ${p.lastName}`,
-        stream: remoteStreams[p.userId] ?? null,
-        micEnabled: p.micEnabled,
-        role: 'STUDENT',
-        isLocal: false,
-      })
-    }
+  // Self tile — always present once user is known
+  if (user) {
+    allTiles.push({
+      userId: user.id,
+      name: `${user.firstName} ${user.lastName}`,
+      stream: localStream,
+      micEnabled: isAudioEnabled,
+      role: (participants[user.id]?.role ?? (isHost ? 'HOST' : 'STUDENT')) as 'HOST' | 'STUDENT',
+      isLocal: true,
+    })
+  }
+
+  // Remote tiles
+  for (const p of participantList) {
+    if (p.userId === user?.id) continue
+    allTiles.push({
+      userId: p.userId,
+      name: `${p.firstName} ${p.lastName}`,
+      stream: remoteStreams[p.userId] ?? null,
+      micEnabled: p.micEnabled,
+      role: p.role,
+      isLocal: false,
+    })
+  }
+
+  // Adaptive grid columns based on participant count
+  function getGridClass(count: number): string {
+    if (count <= 1) return 'grid-cols-1'
+    if (count <= 2) return 'grid-cols-2'
+    if (count <= 4) return 'grid-cols-2'
+    if (count <= 9) return 'grid-cols-2 sm:grid-cols-3'
+    return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
   }
 
   // ── Render: Loading ───────────────────────────────────────────────────────
@@ -552,27 +537,27 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <h1 className="text-white font-semibold truncate max-w-xs">
             {session?.title ?? 'Живой урок'}
           </h1>
           {session?.status === 'LIVE' && (
-            <Badge className="bg-red-600 text-white border-0 flex items-center gap-1">
+            <Badge className="bg-red-600 text-white border-0 flex items-center gap-1 shrink-0">
               <Radio className="h-3 w-3" />
               LIVE
             </Badge>
           )}
           {session?.status === 'SCHEDULED' && (
-            <Badge variant="outline" className="border-gray-600 text-gray-400">Запланировано</Badge>
+            <Badge variant="outline" className="border-gray-600 text-gray-400 shrink-0">Запланировано</Badge>
           )}
           {session?.status === 'ENDED' && (
-            <Badge variant="outline" className="border-gray-600 text-gray-400">Завершено</Badge>
+            <Badge variant="outline" className="border-gray-600 text-gray-400 shrink-0">Завершено</Badge>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-gray-400 text-sm">
+        <div className="flex items-center gap-2 text-gray-400 text-sm shrink-0">
           <Users className="h-4 w-4" />
-          <span>{participantList.length}</span>
+          <span>{allTiles.length}</span>
           {!isConnected && (
             <span className="text-yellow-500 text-xs flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" /> Переподключение...
@@ -595,54 +580,22 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         </div>
       )}
 
-      {/* ── Main video area ─────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-2 p-2 min-h-0">
-
-        {/* Host video — large */}
-        <div className="flex-1 min-h-0 rounded-xl overflow-hidden bg-gray-900">
-          {isHost ? (
-            /* Host sees their own stream in the main tile */
-            <div className="w-full h-full relative bg-gray-900 rounded-xl overflow-hidden">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-                style={{ display: isVideoEnabled ? 'block' : 'none' }}
-              />
-              {!isVideoEnabled && (
-                <div className="w-full h-full flex items-center justify-center text-gray-500 flex-col gap-2">
-                  <VideoOff className="h-12 w-12" />
-                  <span>Камера выключена</span>
-                </div>
-              )}
-              <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                <span className="text-white text-sm bg-black/60 px-2 py-0.5 rounded-full">
-                  {user?.firstName} {user?.lastName} (Вы — Хост)
-                </span>
-                <Badge className="bg-amber-500/80 text-white border-0 text-xs">Хост</Badge>
-              </div>
+      {/* ── Video grid ──────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-2">
+        {allTiles.length === 0 ? (
+          /* No participants yet */
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center text-gray-600">
+              <Users className="h-12 w-12 mx-auto mb-2" />
+              <p>Ожидание участников...</p>
             </div>
-          ) : (
-            /* Students see the host's video in the main tile */
-            <VideoTile
-              stream={hostStream}
-              name={hostName}
-              isLarge
-              role="HOST"
-              isMuted={!hostParticipant?.micEnabled}
-            />
-          )}
-        </div>
-
-        {/* Small tiles — participants sidebar */}
-        {smallTiles.length > 0 && (
-          <div className="flex lg:flex-col flex-row gap-2 lg:w-48 w-full lg:h-full overflow-x-auto lg:overflow-y-auto lg:overflow-x-visible">
-            {smallTiles.map((tile) => (
+          </div>
+        ) : (
+          <div className={`grid gap-2 ${getGridClass(allTiles.length)}`}>
+            {allTiles.map((tile) => (
               <div
                 key={tile.userId}
-                className="lg:w-full w-36 lg:h-36 h-24 shrink-0 rounded-lg overflow-hidden"
+                className="relative bg-gray-900 rounded-xl overflow-hidden aspect-video"
               >
                 <VideoTile
                   stream={tile.stream}
@@ -655,16 +608,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             ))}
           </div>
         )}
-
-        {/* Empty state if no participants besides self */}
-        {participantList.length <= 1 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center text-gray-600">
-              <Users className="h-12 w-12 mx-auto mb-2" />
-              <p>Ожидание участников...</p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Controls bar ────────────────────────────────────────────────── */}
@@ -675,7 +618,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           <button
             onClick={toggleAudio}
             title={isAudioEnabled ? 'Выключить микрофон' : 'Включить микрофон'}
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors min-w-[60px] ${
               isAudioEnabled
                 ? 'bg-gray-700 hover:bg-gray-600 text-white'
                 : 'bg-red-600 hover:bg-red-700 text-white'
@@ -689,7 +632,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           <button
             onClick={toggleVideo}
             title={isVideoEnabled ? 'Выключить камеру' : 'Включить камеру'}
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors ${
+            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors min-w-[60px] ${
               isVideoEnabled
                 ? 'bg-gray-700 hover:bg-gray-600 text-white'
                 : 'bg-red-600 hover:bg-red-700 text-white'
@@ -705,7 +648,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
               onClick={handleStartBroadcast}
               disabled={isStartingLive}
               title="Начать трансляцию"
-              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50"
+              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 min-w-[60px]"
             >
               {isStartingLive ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -720,21 +663,21 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           {isHost ? (
             <button
               onClick={handleEndSession}
-              title="Завершить урок"
-              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors"
+              title="Завершить трансляцию"
+              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors min-w-[60px]"
             >
               <PhoneOff className="h-5 w-5" />
-              <span className="text-xs">Завершить</span>
+              <span className="text-xs">Завершить трансляцию</span>
             </button>
           ) : (
             /* Leave session — students */
             <button
               onClick={handleLeave}
-              title="Покинуть урок"
-              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors"
+              title="Покинуть"
+              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors min-w-[60px]"
             >
               <PhoneOff className="h-5 w-5" />
-              <span className="text-xs">Выйти</span>
+              <span className="text-xs">Покинуть</span>
             </button>
           )}
         </div>

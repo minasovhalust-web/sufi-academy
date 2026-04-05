@@ -183,14 +183,14 @@ function CountrySelect() {
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-3 items-end">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
         <div className="flex-1 space-y-2">
           <Label htmlFor="country">Страна</Label>
           <Select
             value={selected}
             onValueChange={(v) => { setSelected(v); setSaveStatus('idle') }}
           >
-            <SelectTrigger id="country">
+            <SelectTrigger id="country" className="min-h-[44px]">
               <SelectValue placeholder="Выберите страну…" />
             </SelectTrigger>
             <SelectContent className="max-h-72">
@@ -205,8 +205,7 @@ function CountrySelect() {
         <Button
           onClick={handleSave}
           disabled={!isDirty || saveStatus === 'saving'}
-          size="sm"
-          className="gap-2 shrink-0"
+          className="w-full sm:w-auto gap-2 shrink-0 min-h-[44px]"
         >
           {saveStatus === 'saving' ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -271,22 +270,26 @@ function UpcomingLessons() {
       {upcoming.map((lesson) => (
         <div
           key={lesson.id}
-          className="flex items-start gap-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow"
+          className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow"
         >
-          <div className="flex-shrink-0 bg-indigo-50 rounded-lg p-2.5">
-            <CalendarDays className="h-5 w-5 text-indigo-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-800 truncate">{lesson.title}</p>
-            <div className="flex items-center gap-1.5 mt-1 text-sm text-indigo-600">
-              <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>{formatLessonDate(lesson.scheduledAt)}</span>
+          {/* Icon + text */}
+          <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+            <div className="flex-shrink-0 bg-indigo-50 rounded-lg p-2.5">
+              <CalendarDays className="h-5 w-5 text-indigo-600" />
             </div>
-            {lesson.courseTitle && (
-              <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.courseTitle}</p>
-            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-gray-800 truncate">{lesson.title}</p>
+              <div className="flex items-center gap-1.5 mt-1 text-sm text-indigo-600">
+                <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>{formatLessonDate(lesson.scheduledAt)}</span>
+              </div>
+              {lesson.courseTitle && (
+                <p className="text-xs text-gray-400 mt-0.5 truncate">{lesson.courseTitle}</p>
+              )}
+            </div>
           </div>
-          <Button asChild size="sm" variant="outline" className="flex-shrink-0 self-center gap-1 min-h-[44px] px-4">
+          {/* Button — full-width on mobile, auto on sm+ */}
+          <Button asChild size="sm" variant="outline" className="w-full sm:w-auto flex-shrink-0 gap-1 min-h-[44px] px-4">
             <Link href={`/learn/${lesson.courseId}`}>
               Перейти
               <ChevronRight className="h-3.5 w-3.5" />
@@ -508,53 +511,54 @@ export default function DashboardPage() {
           {/* Tabs: Обучение / Профиль */}
           <Tabs defaultValue="learning" className="w-full">
             <TabsList className="mb-6 sm:mb-8 w-full sm:w-auto">
-              <TabsTrigger value="learning" className="gap-2 flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
+              <TabsTrigger value="learning" className="gap-2 flex-1 sm:flex-none min-h-[44px]">
                 <BookOpen className="h-4 w-4" />
                 Обучение
               </TabsTrigger>
-              <TabsTrigger value="profile" className="gap-2 flex-1 sm:flex-none min-h-[44px] sm:min-h-0">
+              <TabsTrigger value="profile" className="gap-2 flex-1 sm:flex-none min-h-[44px]">
                 <Settings className="h-4 w-4" />
-                Настройки профиля
+                <span className="hidden sm:inline">Настройки профиля</span>
+                <span className="sm:hidden">Профиль</span>
               </TabsTrigger>
             </TabsList>
 
             {/* ── Tab: Обучение ── */}
             <TabsContent value="learning">
               {/* Stats row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 sm:mb-10">
+              <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-10">
                 <Card className="shadow-sm border-gray-100">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                  <CardHeader className="pb-1 px-3 pt-3 sm:px-6 sm:pt-6 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide leading-tight">
                       Всего записей
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold text-gray-900">{enrollments.length}</p>
-                    <p className="text-xs text-gray-400 mt-1">{activeEnrollments.length} активных</p>
+                  <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6">
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900">{enrollments.length}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400 mt-1">{activeEnrollments.length} активных</p>
                   </CardContent>
                 </Card>
 
                 <Card className="shadow-sm border-gray-100">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                  <CardHeader className="pb-1 px-3 pt-3 sm:px-6 sm:pt-6 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide leading-tight">
                       В процессе
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold text-gray-900">{activeEnrollments.length}</p>
-                    <p className="text-xs text-gray-400 mt-1">курсов в обучении</p>
+                  <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6">
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900">{activeEnrollments.length}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400 mt-1">курсов</p>
                   </CardContent>
                 </Card>
 
                 <Card className="shadow-sm border-gray-100">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+                  <CardHeader className="pb-1 px-3 pt-3 sm:px-6 sm:pt-6 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-xs font-medium text-gray-400 uppercase tracking-wide leading-tight">
                       Завершено
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold text-gray-900">{completedEnrollments.length}</p>
-                    <p className="text-xs text-gray-400 mt-1">успешно пройдено</p>
+                  <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6">
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900">{completedEnrollments.length}</p>
+                    <p className="text-[10px] sm:text-xs text-gray-400 mt-1">пройдено</p>
                   </CardContent>
                 </Card>
               </div>

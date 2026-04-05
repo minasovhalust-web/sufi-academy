@@ -11,13 +11,13 @@ import {
   useCourseMaterials,
 } from '@/hooks/api/useCourses'
 import { useVideosByLesson } from '@/hooks/api/useVideos'
-import { chatApi, storageApi, progressApi } from '@/lib/api'
+import { chatApi, storageApi, progressApi, liveApi } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import type { Video, Material, Lesson } from '@/types'
+import type { Video, Material, Lesson, LiveSession } from '@/types'
 import {
   ChevronDown,
   Clock,
@@ -43,6 +43,7 @@ import {
   CornerUpLeft,
   Trash2,
   Mail,
+  Radio,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -865,6 +866,18 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
 
   const completedLessonIds = new Set<string>(progressData?.completedLessonIds ?? [])
 
+  // ── Live session polling ──────────────────────────────────────────────────
+  const { data: liveSessions } = useQuery({
+    queryKey: ['live-sessions', params.courseId],
+    queryFn: async () => {
+      const res = await liveApi.getSessionsByCourse(params.courseId)
+      return (res.data?.data ?? res.data ?? []) as LiveSession[]
+    },
+    enabled: isAuthenticated,
+    refetchInterval: 30_000,
+  })
+  const activeLiveSession = liveSessions?.find((s) => s.status === 'LIVE') ?? null
+
   const toggleProgressMutation = useMutation({
     mutationFn: async ({ lessonId, completed }: { lessonId: string; completed: boolean }) => {
       if (completed) {
@@ -1049,6 +1062,30 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
               </>
             )}
           </Badge>
+        )}
+
+        {/* Live session button */}
+        {activeLiveSession ? (
+          <Button
+            asChild
+            size="sm"
+            className="shrink-0 bg-green-600 hover:bg-green-700 text-white gap-1.5 min-h-[36px]"
+          >
+            <Link href={`/live/${activeLiveSession.id}`}>
+              <Radio className="h-3.5 w-3.5 animate-pulse" />
+              Войти в эфир
+            </Link>
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled
+            className="shrink-0 gap-1.5 text-gray-400 border-gray-200 min-h-[36px]"
+          >
+            <Radio className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Прямой эфир</span>
+          </Button>
         )}
       </header>
 
