@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { Footer } from './Footer'
 
 // Routes on which the global footer should be hidden (full-screen chat layouts)
-const HIDE_FOOTER_PREFIXES = ['/messages', '/learn/']
+const HIDE_FOOTER_PREFIXES = ['/messages', '/learn/', '/live/']
 
 export function ConditionalFooter() {
   const pathname = usePathname()

@@ -133,21 +133,21 @@ function AudioOnlyTile({
   isLocal?: boolean
 }) {
   return (
-    <div className="relative bg-gray-800 rounded-xl overflow-hidden flex flex-col items-center justify-center w-full h-full gap-3 py-4">
-      <div className="h-16 w-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
-        <span className="text-white font-bold text-xl select-none">{getInitials(name)}</span>
+    <div className="relative bg-gray-800 rounded-xl overflow-hidden flex flex-col items-center justify-center w-full h-full gap-2 py-3 min-h-[80px]">
+      <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shrink-0">
+        <span className="text-white font-bold text-base sm:text-xl select-none">{getInitials(name)}</span>
       </div>
-      <span className="text-gray-200 text-sm font-medium">
+      <span className="text-gray-200 text-xs sm:text-sm font-medium truncate max-w-[90%] text-center leading-tight px-1">
         {name}
         {isLocal ? ' (Вы)' : ''}
       </span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
         {isMuted ? (
-          <MicOff className="h-4 w-4 text-red-400" />
+          <MicOff className="h-3.5 w-3.5 text-red-400 shrink-0" />
         ) : (
-          <Mic className="h-4 w-4 text-green-400 animate-pulse" />
+          <Mic className="h-3.5 w-3.5 text-green-400 animate-pulse shrink-0" />
         )}
-        <span className="text-xs text-gray-400">{isMuted ? 'Откл.' : 'Говорит'}</span>
+        <span className="text-[10px] text-gray-400">{isMuted ? 'Откл.' : 'Говорит'}</span>
       </div>
     </div>
   )
@@ -666,11 +666,16 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       socket.on('mute-speaker', handleMuteEvent)
 
       // ── Live chat ────────────────────────────────────────────────────────
-      socket.on('live-message', (msg: LiveChatMessage) => {
-        if (!aborted) {
-          setChatMessages((prev) => [...prev, msg])
-        }
-      })
+      const chatHandler = (msg: LiveChatMessage & { message?: string }) => {
+        if (aborted) return
+        // Normalise: backend may use `message` or `content` field
+        setChatMessages((prev) => [
+          ...prev,
+          { ...msg, content: msg.content ?? msg.message ?? '' },
+        ])
+      }
+      socket.on('live-chat-message', chatHandler) // primary event name
+      socket.on('live-message', chatHandler)       // legacy fallback
 
       // ── Session ended ────────────────────────────────────────────────────
       socket.on('session-ended', () => {
@@ -764,8 +769,29 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Live chat send ────────────────────────────────────────────────────────
 
   const handleSendChat = () => {
-    if (!chatInput.trim() || !socketRef.current?.connected) return
-    socketRef.current.emit('live-message', { sessionId, content: chatInput.trim() })
+    const content = chatInput.trim()
+    if (!content || !socketRef.current?.connected) return
+    const userName = user ? `${user.firstName} ${user.lastName}` : ''
+    // Emit with new event name; include both `message` and `content` fields so
+    // either backend format is handled
+    socketRef.current.emit('live-chat-message', {
+      sessionId,
+      message: content,
+      content,
+      userId: user?.id ?? '',
+      userName,
+    })
+    // Optimistically add own message so it appears immediately
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: `local-${Date.now()}`,
+        userId: user?.id ?? '',
+        name: userName,
+        content,
+        timestamp: new Date().toISOString(),
+      },
+    ])
     setChatInput('')
   }
 
@@ -925,7 +951,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-gray-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-white">
           <Loader2 className="h-10 w-10 animate-spin text-purple-400" />
           <p className="text-gray-300">Подключение к сессии...</p>
@@ -938,7 +964,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
   if (error && !isConnected) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 bg-gray-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-white max-w-md text-center px-4">
           <AlertCircle className="h-12 w-12 text-red-400" />
           <h2 className="text-xl font-semibold">Ошибка подключения</h2>
@@ -958,7 +984,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Render: Session ───────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen bg-gray-950 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-gray-900 border-b border-gray-800 shrink-0">
@@ -1012,7 +1038,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       )}
 
       {/* ── Main area: video grid + sidebar ─────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
 
         {/* ── Video / audio grid ─────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto p-2">
@@ -1056,61 +1082,77 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
         {/* ── Sidebar ────────────────────────────────────────────────────── */}
         {sidebarOpen && (
-          <div className="w-72 lg:w-80 bg-gray-900 border-l border-gray-800 flex flex-col shrink-0">
-            {/* Sidebar tabs */}
-            <div className="flex border-b border-gray-800 shrink-0">
-              <button
-                onClick={() => setSidebarTab('chat')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
-                  sidebarTab === 'chat'
-                    ? 'text-white border-b-2 border-indigo-500'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                Чат
-              </button>
-              {isHost && (
+          <>
+            {/* Mobile backdrop — tap to close */}
+            <div
+              className="fixed inset-0 bg-black/60 z-10 sm:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+
+            {/* Panel: absolute overlay on mobile, inline on sm+ */}
+            <div className="absolute sm:relative inset-y-0 right-0 z-20 w-[85vw] sm:w-72 lg:w-80 bg-gray-900 border-l border-gray-800 flex flex-col shrink-0">
+              {/* Sidebar tabs */}
+              <div className="flex border-b border-gray-800 shrink-0">
                 <button
-                  onClick={() => setSidebarTab('participants')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors ${
-                    sidebarTab === 'participants'
+                  onClick={() => setSidebarTab('chat')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                    sidebarTab === 'chat'
                       ? 'text-white border-b-2 border-indigo-500'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  <Users className="h-3.5 w-3.5" />
-                  Участники
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Чат
                 </button>
-              )}
-            </div>
+                {isHost && (
+                  <button
+                    onClick={() => setSidebarTab('participants')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                      sidebarTab === 'participants'
+                        ? 'text-white border-b-2 border-indigo-500'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Участники
+                  </button>
+                )}
+                {/* Close button for mobile */}
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="sm:hidden flex items-center justify-center px-3 text-gray-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-            {/* Sidebar content */}
-            <div className="flex-1 overflow-hidden">
-              {sidebarTab === 'chat' ? (
-                <LiveChatPanel
-                  messages={chatMessages}
-                  chatInput={chatInput}
-                  onInputChange={setChatInput}
-                  onSend={handleSendChat}
-                  currentUserId={user?.id ?? ''}
-                />
-              ) : (
-                <ParticipantsPanel
-                  participants={participants}
-                  currentUserId={user?.id ?? ''}
-                  onAllowSpeak={handleAllowSpeak}
-                  onRevokeSpeak={handleRevokeSpeak}
-                />
-              )}
+              {/* Sidebar content */}
+              <div className="flex-1 overflow-hidden">
+                {sidebarTab === 'chat' ? (
+                  <LiveChatPanel
+                    messages={chatMessages}
+                    chatInput={chatInput}
+                    onInputChange={setChatInput}
+                    onSend={handleSendChat}
+                    currentUserId={user?.id ?? ''}
+                  />
+                ) : (
+                  <ParticipantsPanel
+                    participants={participants}
+                    currentUserId={user?.id ?? ''}
+                    onAllowSpeak={handleAllowSpeak}
+                    onRevokeSpeak={handleRevokeSpeak}
+                  />
+                )}
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
 
       {/* ── Controls bar ───────────────────────────────────────────────────── */}
-      <div className="bg-gray-900 border-t border-gray-800 px-4 py-2.5 shrink-0">
-        <div className="flex items-center justify-center gap-2 flex-wrap">
+      <div className="bg-gray-900 border-t border-gray-800 px-3 py-2 sm:px-4 sm:py-2.5 shrink-0 safe-area-bottom">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap">
 
           {/* Microphone */}
           <button
@@ -1123,7 +1165,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 ? 'Выключить микрофон'
                 : 'Включить микрофон'
             }
-            className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors min-w-[56px] ${
+            className={`flex flex-col items-center gap-1 rounded-xl transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2 ${
               !isHost && !micAllowedByHost
                 ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
                 : isAudioEnabled
@@ -1140,7 +1182,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             <button
               onClick={toggleVideo}
               title={isVideoEnabled ? 'Выключить камеру' : 'Включить камеру'}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-colors min-w-[56px] ${
+              className={`flex flex-col items-center gap-1 rounded-xl transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2 ${
                 isVideoEnabled
                   ? 'bg-gray-700 hover:bg-gray-600 text-white'
                   : 'bg-red-600 hover:bg-red-700 text-white'
@@ -1156,14 +1198,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             <button
               onClick={handleStartBroadcast}
               disabled={isStartingLive}
-              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 min-w-[56px]"
+              className="flex flex-col items-center gap-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
             >
               {isStartingLive ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <Radio className="h-5 w-5" />
               )}
-              <span className="text-[10px] leading-none">Начать эфир</span>
+              <span className="text-[10px] leading-none">Эфир</span>
             </button>
           )}
 
@@ -1173,7 +1215,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
               <button
                 onClick={handleStopRecording}
                 disabled={isUploadingRecording}
-                className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-700 hover:bg-red-800 text-white transition-colors min-w-[56px] relative"
+                className="relative flex flex-col items-center gap-1 rounded-xl bg-red-700 hover:bg-red-800 text-white transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
                 title="Остановить запись"
               >
                 {isUploadingRecording ? (
@@ -1182,15 +1224,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                   <Square className="h-5 w-5 fill-current" />
                 )}
                 <span className="text-[10px] leading-none">
-                  {isUploadingRecording ? 'Сохранение...' : 'Стоп запись'}
+                  {isUploadingRecording ? 'Сохр...' : 'Стоп'}
                 </span>
-                {/* Recording indicator dot */}
-                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-400 animate-pulse" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-400 animate-pulse" />
               </button>
             ) : (
               <button
                 onClick={handleStartRecording}
-                className="flex flex-col items-center gap-1 p-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors min-w-[56px]"
+                className="flex flex-col items-center gap-1 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
                 title="Начать запись"
               >
                 <Circle className="h-5 w-5 text-red-400" />
@@ -1200,13 +1241,13 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           )}
 
           {/* Separator */}
-          <div className="w-px h-10 bg-gray-700 mx-1" />
+          <div className="w-px h-8 bg-gray-700 mx-0.5 sm:mx-1" />
 
           {/* End / Leave */}
           {isHost ? (
             <button
               onClick={handleEndSession}
-              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors min-w-[56px]"
+              className="flex flex-col items-center gap-1 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
               title="Завершить трансляцию"
             >
               <PhoneOff className="h-5 w-5" />
@@ -1215,7 +1256,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           ) : (
             <button
               onClick={handleLeave}
-              className="flex flex-col items-center gap-1 p-3 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors min-w-[56px]"
+              className="flex flex-col items-center gap-1 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
               title="Покинуть"
             >
               <PhoneOff className="h-5 w-5" />
