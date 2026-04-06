@@ -46,6 +46,7 @@ const sessionRoom = (sessionId: string) => `live:${sessionId}`;
  *   grant-mic        { sessionId, targetUserId }     → broadcasts mic-granted (host only)
  *   revoke-mic       { sessionId, targetUserId }     → broadcasts mic-revoked (host only)
  *   webrtc-signal    { sessionId, targetUserId, signal } → forwarded to target peer
+ *   live-chat-message { sessionId, message, userName } → broadcasts live-chat-message
  *   end-session      { sessionId }                   → broadcasts session-ended (host only)
  *
  * ── Events (server → client) ────────────────────────────────────────────────
@@ -56,6 +57,7 @@ const sessionRoom = (sessionId: string) => `live:${sessionId}`;
  *   mic-granted        { userId, sessionId }
  *   mic-revoked        { userId, sessionId }
  *   webrtc-signal      { fromUserId, sessionId, signal }     → target peer only
+ *   live-chat-message   { userId, userName, message, timestamp }
  *   session-ended      { sessionId, endedAt }
  *   exception          { event, message }
  */
@@ -299,6 +301,25 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
       fromUserId: client.data.user.id,
       sessionId: dto.sessionId,
       signal: dto.signal,
+    });
+  }
+
+  /**
+   * live-chat-message — broadcast a text chat message to all participants
+   * in the live session room (lightweight text overlay for the stream).
+   */
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('live-chat-message')
+  handleChatMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() dto: { sessionId: string; message: string; userName: string },
+  ): void {
+    const roomKey = sessionRoom(dto.sessionId);
+    this.server.to(roomKey).emit('live-chat-message', {
+      userId: client.data.user.id,
+      userName: dto.userName,
+      message: dto.message,
+      timestamp: new Date().toISOString(),
     });
   }
 
