@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { io, Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth.store'
-import { liveApi, storageApi, apiClient } from '@/lib/api'
+import { liveApi, storageApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -291,17 +291,22 @@ function ParticipantsPanel({
                   onClick={() =>
                     p.micEnabled ? onRevokeSpeak(p.userId) : onAllowSpeak(p.userId)
                   }
-                  title={p.micEnabled ? 'Отключить микрофон' : 'Разрешить говорить'}
-                  className={`p-1 rounded-md text-xs transition-colors ${
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
                     p.micEnabled
                       ? 'bg-red-600/30 hover:bg-red-600/50 text-red-300'
                       : 'bg-green-600/30 hover:bg-green-600/50 text-green-300'
                   }`}
                 >
                   {p.micEnabled ? (
-                    <MicOff className="h-3.5 w-3.5" />
+                    <>
+                      <MicOff className="h-3.5 w-3.5" />
+                      <span>Заглушить</span>
+                    </>
                   ) : (
-                    <UserCheck className="h-3.5 w-3.5" />
+                    <>
+                      <UserCheck className="h-3.5 w-3.5" />
+                      <span>Разрешить</span>
+                    </>
                   )}
                 </button>
               </div>
@@ -642,8 +647,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         )
       })
 
-      // ── revoke-speak: host revokes mic ──────────────────────────────────
-      socket.on('revoke-speak', (data: { userId: string }) => {
+      // ── revoke-speak / mute-speaker: host mutes a student ───────────────
+      const handleMuteEvent = (data: { userId: string }) => {
         if (aborted) return
         if (data.userId === userIdRef.current) {
           const track = localStreamRef.current?.getAudioTracks()[0]
@@ -656,7 +661,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: false } }
             : prev
         )
-      })
+      }
+      socket.on('revoke-speak', handleMuteEvent)
+      socket.on('mute-speaker', handleMuteEvent)
 
       // ── Live chat ────────────────────────────────────────────────────────
       socket.on('live-message', (msg: LiveChatMessage) => {
@@ -745,6 +752,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   }
 
   const handleRevokeSpeak = (userId: string) => {
+    // Emit both events: new `mute-speaker` + legacy `revoke-speak` for compatibility
+    socketRef.current?.emit('mute-speaker', { sessionId, userId })
     socketRef.current?.emit('revoke-speak', { sessionId, userId })
     // Optimistic update
     setParticipants((prev) =>
@@ -764,8 +773,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
   const handleStartRecording = () => {
     if (!localStreamRef.current) return
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-      ? 'video/webm;codecs=vp9,opus'
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+      ? 'video/webm;codecs=vp8,opus'
       : MediaRecorder.isTypeSupported('video/webm')
       ? 'video/webm'
       : 'video/mp4'
@@ -780,35 +789,56 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
       recorder.onstop = async () => {
         setIsUploadingRecording(true)
+        const chunks = [...recordedChunksRef.current]
+        recordedChunksRef.current = []
+        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+        const filename = `live-recording-${sessionId}.${ext}`
+        const title = `Запись эфира: ${session?.title ?? sessionId}`
+
         try {
-          const blob = new Blob(recordedChunksRef.current, { type: mimeType })
-          const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
-          const file = new File([blob], `live-recording-${sessionId}.${ext}`, { type: mimeType })
+          const blob = new Blob(chunks, { type: mimeType })
+          const file = new File([blob], filename, { type: mimeType })
 
           // Upload to storage
           const uploadRes = await storageApi.upload(file)
-          const { url } = uploadRes.data?.data as { url: string }
+          const uploadedUrl = (uploadRes.data?.data as { url?: string })?.url ?? ''
 
-          // Create video entry in the course
-          const title = `Запись эфира: ${session?.title ?? sessionId}`
-          await apiClient.post('/videos', {
-            title,
-            storageKey: url,
-            mimeType,
-            courseId: session?.courseId,
-            description: `Запись прямого эфира от ${new Date().toLocaleDateString('ru-RU')}`,
-          })
-
-          toast.success('Запись сохранена в курс', {
+          toast.success('Запись сохранена', {
             description: title,
-            duration: 5000,
+            action: {
+              label: 'Скачать',
+              onClick: () => {
+                const a = document.createElement('a')
+                a.href = uploadedUrl || URL.createObjectURL(blob)
+                a.download = filename
+                a.target = '_blank'
+                a.rel = 'noopener noreferrer'
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+              },
+            },
+            duration: 15000,
           })
-        } catch (err) {
-          console.error('[recording] Upload failed:', err)
-          toast.error('Не удалось сохранить запись')
+        } catch (uploadErr) {
+          console.error('[recording] Upload failed, falling back to local download:', uploadErr)
+          // Fallback: trigger browser download directly from memory
+          try {
+            const blob = new Blob(chunks, { type: mimeType })
+            const objectUrl = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = objectUrl
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
+            toast.success('Запись скачивается...', { description: title })
+          } catch {
+            toast.error('Не удалось сохранить запись')
+          }
         } finally {
           setIsUploadingRecording(false)
-          recordedChunksRef.current = []
         }
       }
 
