@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { io, Socket } from 'socket.io-client'
@@ -352,7 +352,13 @@ function formatMessageTime(isoString: string): string {
 
 // ── ChatPanel ─────────────────────────────────────────────────────────────────
 
-function ChatPanel({ courseId }: { courseId: string }) {
+function ChatPanel({
+  courseId,
+  onNewMessage,
+}: {
+  courseId: string
+  onNewMessage?: (msg: ChatMessage) => void
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [connected, setConnected] = useState(false)
@@ -424,11 +430,14 @@ function ChatPanel({ courseId }: { courseId: string }) {
       ({ messages: hist }: { messages: ChatMessage[]; hasMore: boolean }) => {
         setMessages(hist)
         setHistoryLoading(false)
+        // Report history messages to parent for unread counting
+        hist.forEach((m) => onNewMessage?.(m))
       },
     )
 
     sock.on('new-message', (msg: ChatMessage) => {
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
+      onNewMessage?.(msg)
     })
 
     sock.on(
@@ -852,6 +861,45 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
   const [activeTab, setActiveTab] = useState<ActiveTab>('lesson')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // ── Chat unread badge ──────────────────────────────────────────────────────
+  const user = useAuthStore((state) => state.user)
+  const chatLastViewedKey = `chat_last_viewed_${params.courseId}`
+  const [chatUnreadCount, setChatUnreadCount] = useState(0)
+  // Use ref to avoid stale closures inside the onNewMessage callback
+  const activeTabRef = useRef<ActiveTab>('lesson')
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+
+  // Initialise the localStorage timestamp on first visit so history
+  // messages are not counted as unread before the user ever opens the chat.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem(chatLastViewedKey)) {
+      localStorage.setItem(chatLastViewedKey, new Date().toISOString())
+    }
+  }, [chatLastViewedKey])
+
+  // Called by ChatPanel for every history message and every new WS message.
+  const handleChatMessage = useCallback((msg: ChatMessage) => {
+    // If the chat tab is currently open the user can see the message — skip
+    if (activeTabRef.current === 'chat') return
+    // Skip own messages
+    if (!user?.id || msg.senderId === user.id) return
+    const lastViewed = typeof window !== 'undefined'
+      ? (localStorage.getItem(chatLastViewedKey) ?? '')
+      : ''
+    if (!lastViewed || msg.createdAt > lastViewed) {
+      setChatUnreadCount((prev) => prev + 1)
+    }
+  }, [chatLastViewedKey, user?.id])
+
+  // Open chat tab and reset the unread counter
+  const handleSwitchToChat = useCallback(() => {
+    setActiveTab('chat')
+    setChatUnreadCount(0)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(chatLastViewedKey, new Date().toISOString())
+    }
+  }, [chatLastViewedKey])
+
   // ── Progress tracking ──────────────────────────────────────────────────────
   const queryClient = useQueryClient()
 
@@ -1251,7 +1299,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
               Урок
             </button>
             <button
-              onClick={() => setActiveTab('chat')}
+              onClick={handleSwitchToChat}
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === 'chat'
                   ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
@@ -1260,6 +1308,11 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
             >
               <MessageCircle className="h-4 w-4" />
               Чат
+              {chatUnreadCount > 0 && (
+                <span className="ml-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white leading-none">
+                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -1280,7 +1333,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
                 )}
               </div>
             ) : (
-              <ChatPanel courseId={params.courseId} />
+              <ChatPanel courseId={params.courseId} onNewMessage={handleChatMessage} />
             )}
           </div>
 

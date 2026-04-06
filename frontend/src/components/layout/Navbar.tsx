@@ -4,17 +4,58 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Menu, MessageSquare, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth.store'
 import { getInitials } from '@/lib/utils'
+import { directMessagesApi } from '@/lib/api'
+import type { Conversation } from '@/types'
+
+// localStorage key used to track when the user last opened the messages page
+const DM_LAST_VIEWED_KEY = 'dm_last_viewed'
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [dmUnreadCount, setDmUnreadCount] = useState(0)
   const router = useRouter()
   const { isAuthenticated, user, clearAuth, isTeacher, isAdmin } = useAuthStore()
 
   // Prevent hydration mismatch caused by Zustand reading localStorage only on client.
   useEffect(() => { setMounted(true) }, [])
+
+  // ── DM unread count: poll every 30 s ──────────────────────────────────────
+  const { data: conversations } = useQuery<Conversation[]>({
+    queryKey: ['dm', 'conversations', 'navbar'],
+    queryFn: async () => {
+      const res = await directMessagesApi.getConversations()
+      return (res.data?.data ?? res.data ?? []) as Conversation[]
+    },
+    refetchInterval: 30_000,
+    enabled: isAuthenticated,
+  })
+
+  useEffect(() => {
+    if (!conversations || !user?.id) return
+    const lastViewed =
+      typeof window !== 'undefined'
+        ? (localStorage.getItem(DM_LAST_VIEWED_KEY) ?? '')
+        : ''
+    const count = conversations.filter(
+      (c) =>
+        c.lastMessage.senderId !== user.id &&
+        (!lastViewed || c.lastMessage.createdAt > lastViewed),
+    ).length
+    setDmUnreadCount(count)
+  }, [conversations, user?.id])
+
+  /** Call on every click of the Messages link to reset the badge */
+  const handleMessagesClick = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DM_LAST_VIEWED_KEY, new Date().toISOString())
+    }
+    setDmUnreadCount(0)
+    setMobileMenuOpen(false)
+  }
 
   const handleLogout = () => {
     clearAuth()
@@ -65,10 +106,16 @@ export function Navbar() {
               <>
                 <Link
                   href="/messages"
-                  className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                  onClick={handleMessagesClick}
+                  className="relative p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
                   title="Сообщения"
                 >
                   <MessageSquare className="h-5 w-5" />
+                  {dmUnreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-semibold text-white leading-none">
+                      {dmUnreadCount > 9 ? '9+' : dmUnreadCount}
+                    </span>
+                  )}
                 </Link>
                 {/* Avatar + name → dashboard */}
                 <Link
@@ -181,10 +228,15 @@ export function Navbar() {
                 <Link
                   href="/messages"
                   className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-gray-100 transition-colors"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={handleMessagesClick}
                 >
                   <MessageSquare className="h-4 w-4 text-purple-500" />
                   Сообщения
+                  {dmUnreadCount > 0 && (
+                    <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white leading-none">
+                      {dmUnreadCount > 9 ? '9+' : dmUnreadCount}
+                    </span>
+                  )}
                 </Link>
                 <button
                   onClick={handleLogout}

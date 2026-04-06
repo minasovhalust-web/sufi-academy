@@ -7,6 +7,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Role } from '@prisma/client';
 import { CoursesRepository } from '../repositories/courses.repository';
+import { EnrollmentsRepository } from '../repositories/enrollments.repository';
 import { CreateCourseDto } from '../dto/course/create-course.dto';
 import { UpdateCourseDto } from '../dto/course/update-course.dto';
 
@@ -14,6 +15,7 @@ import { UpdateCourseDto } from '../dto/course/update-course.dto';
 export class CoursesService {
   constructor(
     private readonly coursesRepository: CoursesRepository,
+    private readonly enrollmentsRepository: EnrollmentsRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -28,6 +30,18 @@ export class CoursesService {
       ...dto,
       instructorId: instructorId,
     });
+
+    // Automatically enroll the instructor as an ACTIVE participant of their own course
+    try {
+      await this.enrollmentsRepository.create({
+        status: 'ACTIVE',
+        user: { connect: { id: instructorId } },
+        course: { connect: { id: course.id } },
+      });
+    } catch {
+      // Ignore if enrollment already exists (e.g. unique constraint violation)
+    }
+
     this.eventEmitter.emit('course.created', {
       courseId: course.id,
       instructorId,
