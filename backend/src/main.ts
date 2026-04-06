@@ -28,6 +28,7 @@ import { AppModule } from './app.module';
  */
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
     // Suppress framework-level logs in production, handle them via LoggingInterceptor
     logger:
       process.env.NODE_ENV === 'production'
