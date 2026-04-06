@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Mic, MicOff, Video as VideoIcon, VideoOff,
   PhoneOff, Radio, Users, Loader2, AlertCircle,
-  MessageCircle, Send, CheckCircle2, X,
+  MessageCircle, X,
   UserCheck, Square, Circle,
 } from 'lucide-react'
 import type { LiveSession } from '@/types'
@@ -45,13 +45,7 @@ interface SessionStatePayload {
   activeCount: number
 }
 
-interface LiveChatMessage {
-  id: string
-  userId: string
-  name: string
-  content: string
-  timestamp: string
-}
+// No live chat handler: LiveGateway has no @SubscribeMessage for chat
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -66,10 +60,6 @@ function getInitials(name: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 2)
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
 // ── VideoTile — host with camera ──────────────────────────────────────────────
@@ -154,82 +144,21 @@ function AudioOnlyTile({
 }
 
 // ── LiveChatPanel ─────────────────────────────────────────────────────────────
+// NOTE: The backend LiveGateway has no @SubscribeMessage handler for chat.
+// Supported events: join-session, leave-session, raise-hand, grant-mic,
+// revoke-mic, webrtc-signal, end-session.
+// Chat is shown as "not available" until a backend handler is added.
 
-function LiveChatPanel({
-  messages,
-  chatInput,
-  onInputChange,
-  onSend,
-  currentUserId,
-}: {
-  messages: LiveChatMessage[]
-  chatInput: string
-  onInputChange: (v: string) => void
-  onSend: () => void
-  currentUserId: string
-}) {
-  const endRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
+function LiveChatPanel() {
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages list */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
-            <MessageCircle className="h-8 w-8 opacity-40" />
-            <p className="text-xs">Чат пуст</p>
-          </div>
-        ) : (
-          messages.map((msg) => {
-            const isOwn = msg.userId === currentUserId
-            return (
-              <div key={msg.id} className={`flex flex-col gap-0.5 ${isOwn ? 'items-end' : 'items-start'}`}>
-                {!isOwn && (
-                  <span className="text-[10px] text-gray-400 px-1">{msg.name}</span>
-                )}
-                <div
-                  className={`max-w-[85%] rounded-xl px-3 py-2 text-sm leading-relaxed ${
-                    isOwn
-                      ? 'bg-indigo-600 text-white rounded-tr-sm'
-                      : 'bg-gray-700 text-gray-100 rounded-tl-sm'
-                  }`}
-                >
-                  {msg.content}
-                </div>
-                <span className="text-[10px] text-gray-500 px-1">{formatTime(msg.timestamp)}</span>
-              </div>
-            )
-          })
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {/* Input */}
-      <div className="border-t border-gray-700 p-2 flex gap-2">
-        <input
-          value={chatInput}
-          onChange={(e) => onInputChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              onSend()
-            }
-          }}
-          placeholder="Написать..."
-          className="flex-1 bg-gray-700 text-white placeholder-gray-400 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-indigo-500 min-w-0"
-        />
-        <button
-          onClick={onSend}
-          disabled={!chatInput.trim()}
-          className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-40 shrink-0"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </div>
+    <div className="flex flex-col items-center justify-center h-full gap-3 px-4 text-center">
+      <MessageCircle className="h-10 w-10 text-gray-600 opacity-50" />
+      <p className="text-sm font-medium text-gray-400">Чат недоступен</p>
+      <p className="text-xs text-gray-600 leading-relaxed">
+        Бэкенд (<span className="font-mono text-gray-500">LiveGateway</span>) не содержит обработчика для чата.
+        Функция будет доступна после добавления{' '}
+        <span className="font-mono text-gray-500">@SubscribeMessage</span> на сервере.
+      </p>
     </div>
   )
 }
@@ -347,10 +276,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat')
 
-  // ── Live chat ──────────────────────────────────────────────────────────────
-  const [chatMessages, setChatMessages] = useState<LiveChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
-
   // ── Recording ──────────────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false)
   const [isUploadingRecording, setIsUploadingRecording] = useState(false)
@@ -380,10 +305,19 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-    // Add local tracks (audio only for students, video+audio for host)
+    // Host: add all tracks immediately (video + audio always enabled).
+    // Student: add NO audio track yet — it will be added dynamically when the
+    // host emits grant-mic → backend broadcasts mic-granted. Only video tracks
+    // (if any) are added for students, but since students have no camera in
+    // this app the student peer starts with zero senders.
     const stream = localStreamRef.current
     if (stream) {
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      if (isHostRef.current) {
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      } else {
+        // Students: only add video (camera) tracks; skip audio — managed by host
+        stream.getVideoTracks().forEach((track) => pc.addTrack(track, stream))
+      }
     }
 
     pc.onicecandidate = (event) => {
@@ -608,74 +542,87 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       })
 
-      // ── Mic events ───────────────────────────────────────────────────────
-      socket.on('mic-granted', (data: { userId: string }) => {
-        if (!aborted) {
-          setParticipants((prev) =>
-            prev[data.userId]
-              ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: true, handRaised: false } }
-              : prev
-          )
-        }
-      })
-
-      socket.on('mic-revoked', (data: { userId: string }) => {
-        if (!aborted) {
-          setParticipants((prev) =>
-            prev[data.userId]
-              ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: false } }
-              : prev
-          )
-        }
-      })
-
-      // ── allow-speak: host grants mic to a student ───────────────────────
-      socket.on('allow-speak', (data: { userId: string }) => {
+      // ── mic-granted: backend broadcasts when host calls grant-mic ────────
+      // Payload: { userId, sessionId }
+      socket.on('mic-granted', async (data: { userId: string }) => {
         if (aborted) return
-        // If this message is for the current user — enable their mic
-        if (data.userId === userIdRef.current) {
-          const track = localStreamRef.current?.getAudioTracks()[0]
-          if (track) track.enabled = true
-          setIsAudioEnabled(true)
-          setMicAllowedByHost(true)
-        }
-        // Update participant list mic state
+
+        // Update participant list UI for everyone
         setParticipants((prev) =>
           prev[data.userId]
-            ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: true } }
+            ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: true, handRaised: false } }
             : prev
         )
+
+        // Only the targeted student actually enables their microphone
+        if (data.userId !== userIdRef.current) return
+
+        const stream = localStreamRef.current
+        const track = stream?.getAudioTracks()[0]
+        if (!track || !stream) return
+
+        // Enable the audio track
+        track.enabled = true
+        setIsAudioEnabled(true)
+        setMicAllowedByHost(true)
+
+        // Add the audio track to ALL existing RTCPeerConnections, then
+        // renegotiate each connection so the remote peers start receiving audio.
+        for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
+          try {
+            // Only add if not already present (guard against double-grant)
+            const alreadyAdded = pc.getSenders().some(s => s.track === track)
+            if (!alreadyAdded) {
+              pc.addTrack(track, stream)
+            }
+            // Renegotiate so the remote peer learns about the new audio sender
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            socket!.emit('webrtc-signal', {
+              sessionId: sessionIdRef.current,
+              targetUserId,
+              signal: { type: 'offer', sdp: offer.sdp },
+            })
+          } catch (e) {
+            console.error('[webrtc] mic-granted renegotiation failed for', targetUserId, e)
+          }
+        }
       })
 
-      // ── revoke-speak / mute-speaker: host mutes a student ───────────────
-      const handleMuteEvent = (data: { userId: string }) => {
+      // ── mic-revoked: backend broadcasts when host calls revoke-mic ────────
+      // Payload: { userId, sessionId }
+      socket.on('mic-revoked', (data: { userId: string }) => {
         if (aborted) return
-        if (data.userId === userIdRef.current) {
-          const track = localStreamRef.current?.getAudioTracks()[0]
-          if (track) track.enabled = false
-          setIsAudioEnabled(false)
-          setMicAllowedByHost(false)
-        }
+
+        // Update participant list UI for everyone
         setParticipants((prev) =>
           prev[data.userId]
             ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: false } }
             : prev
         )
-      }
-      socket.on('revoke-speak', handleMuteEvent)
-      socket.on('mute-speaker', handleMuteEvent)
 
-      // ── Live chat ────────────────────────────────────────────────────────
-      const chatHandler = (msg: LiveChatMessage & { message?: string }) => {
-        if (aborted) return
-        // Normalise: backend may use `message` or `content` field
-        setChatMessages((prev) => [
-          ...prev,
-          { ...msg, content: msg.content ?? msg.message ?? '' },
-        ])
-      }
-      socket.on('live-chat-message', chatHandler) // primary event name
-      socket.on('live-message', chatHandler)       // legacy fallback
+        // Only the targeted student actually mutes their microphone
+        if (data.userId !== userIdRef.current) return
+
+        const track = localStreamRef.current?.getAudioTracks()[0]
+        if (track) {
+          track.enabled = false
+          // Remove the audio sender from every peer connection so remote peers
+          // stop receiving audio immediately without waiting for renegotiation
+          for (const pc of Object.values(peersRef.current)) {
+            const sender = pc.getSenders().find(s => s.track === track)
+            if (sender) {
+              try { pc.removeTrack(sender) } catch { /* ignore if already removed */ }
+            }
+          }
+        }
+        setIsAudioEnabled(false)
+        setMicAllowedByHost(false)
+      })
+
+      // ── No live chat handler: LiveGateway has no @SubscribeMessage for chat
+      // (supported events: join-session, leave-session, raise-hand, grant-mic,
+      //  revoke-mic, webrtc-signal, end-session)
 
       // ── Session ended ────────────────────────────────────────────────────
       socket.on('session-ended', () => {
@@ -749,7 +696,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Host: allow / revoke student mic ──────────────────────────────────────
 
   const handleAllowSpeak = (userId: string) => {
-    socketRef.current?.emit('allow-speak', { sessionId, userId })
+    socketRef.current?.emit('grant-mic', { sessionId, targetUserId: userId })
     // Optimistic update
     setParticipants((prev) =>
       prev[userId] ? { ...prev, [userId]: { ...prev[userId], micEnabled: true } } : prev
@@ -757,42 +704,11 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   }
 
   const handleRevokeSpeak = (userId: string) => {
-    // Emit both events: new `mute-speaker` + legacy `revoke-speak` for compatibility
-    socketRef.current?.emit('mute-speaker', { sessionId, userId })
-    socketRef.current?.emit('revoke-speak', { sessionId, userId })
+    socketRef.current?.emit('revoke-mic', { sessionId, targetUserId: userId })
     // Optimistic update
     setParticipants((prev) =>
       prev[userId] ? { ...prev, [userId]: { ...prev[userId], micEnabled: false } } : prev
     )
-  }
-
-  // ── Live chat send ────────────────────────────────────────────────────────
-
-  const handleSendChat = () => {
-    const content = chatInput.trim()
-    if (!content || !socketRef.current?.connected) return
-    const userName = user ? `${user.firstName} ${user.lastName}` : ''
-    // Emit with new event name; include both `message` and `content` fields so
-    // either backend format is handled
-    socketRef.current.emit('live-chat-message', {
-      sessionId,
-      message: content,
-      content,
-      userId: user?.id ?? '',
-      userName,
-    })
-    // Optimistically add own message so it appears immediately
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: `local-${Date.now()}`,
-        userId: user?.id ?? '',
-        name: userName,
-        content,
-        timestamp: new Date().toISOString(),
-      },
-    ])
-    setChatInput('')
   }
 
   // ── Recording (host only) ──────────────────────────────────────────────────
@@ -1129,13 +1045,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
               {/* Sidebar content */}
               <div className="flex-1 overflow-hidden">
                 {sidebarTab === 'chat' ? (
-                  <LiveChatPanel
-                    messages={chatMessages}
-                    chatInput={chatInput}
-                    onInputChange={setChatInput}
-                    onSend={handleSendChat}
-                    currentUserId={user?.id ?? ''}
-                  />
+                  <LiveChatPanel />
                 ) : (
                   <ParticipantsPanel
                     participants={participants}
