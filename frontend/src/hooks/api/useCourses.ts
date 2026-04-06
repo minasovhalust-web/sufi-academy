@@ -66,6 +66,8 @@ export function useMyEnrollments(params?: Record<string, unknown>) {
       return response.data.data as Enrollment[]
     },
     enabled: params !== undefined,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   })
 }
 
@@ -120,7 +122,10 @@ export function useDeleteCourse() {
   })
 }
 
-export function useCourseModules(courseId: string, options?: { enabled?: boolean }) {
+export function useCourseModules(
+  courseId: string,
+  options?: { enabled?: boolean; refetchInterval?: number },
+) {
   return useQuery({
     queryKey: ['courses', courseId, 'modules'],
     queryFn: async () => {
@@ -131,6 +136,8 @@ export function useCourseModules(courseId: string, options?: { enabled?: boolean
     // sent before the Zustand auth store has hydrated (which would result in a
     // missing Authorization header and a 401 from the backend).
     enabled: !!courseId && (options?.enabled !== false),
+    staleTime: 5_000,
+    refetchInterval: options?.refetchInterval ?? 10_000,
   })
 }
 
@@ -159,6 +166,8 @@ export function useCourseLessons(courseId: string, moduleId: string) {
       return response.data.data as Lesson[]
     },
     enabled: !!courseId && !!moduleId,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
   })
 }
 
@@ -187,6 +196,8 @@ export function useCourseMaterials(lessonId: string) {
       return response.data.data as Material[]
     },
     enabled: !!lessonId,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
   })
 }
 

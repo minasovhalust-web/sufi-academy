@@ -853,7 +853,7 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
   )
   const { data: modules = [], isLoading: modulesLoading } = useCourseModules(
     params.courseId,
-    { enabled: isAuthenticated },
+    { enabled: isAuthenticated, refetchInterval: 30_000 },
   )
 
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())

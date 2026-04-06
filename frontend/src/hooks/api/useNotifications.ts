@@ -10,7 +10,8 @@ export function useNotifications(params?: Record<string, unknown>) {
       const response = await notificationsApi.getMy(params)
       return response.data as ApiResponse<PaginatedResponse<Notification>>
     },
-    refetchInterval: 30000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   })
 }
 

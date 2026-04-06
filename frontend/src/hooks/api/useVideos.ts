@@ -11,6 +11,8 @@ export function useVideosByLesson(lessonId: string) {
       return response.data.data as Video[]  // backend wraps in { success, data, timestamp }
     },
     enabled: !!lessonId,
+    staleTime: 5_000,
+    refetchInterval: 15_000,
   })
 }
 

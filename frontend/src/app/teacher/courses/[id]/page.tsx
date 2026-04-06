@@ -111,6 +111,7 @@ type UploadState = 'idle' | 'uploading' | 'saving' | 'error'
 
 function VideoSection({ lessonId }: { lessonId: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
   const invalidateVideos = useInvalidateVideos(lessonId)
 
   const { data: videosData, isLoading: videosLoading } = useVideosByLesson(lessonId)
@@ -192,6 +193,8 @@ function VideoSection({ lessonId }: { lessonId: string }) {
       await videosApi.update(videoId, { status: 'READY' })
 
       invalidateVideos()
+      // Explicit invalidation for immediate cache refresh
+      queryClient.invalidateQueries({ queryKey: ['lessons', lessonId, 'videos'] })
       toast.success('Видео успешно загружено')
 
       // Reset form
@@ -393,6 +396,7 @@ function VideoSection({ lessonId }: { lessonId: string }) {
 // ── LessonItem ──────────────────────────────────────────────────────────────
 
 function LessonItem({ lesson }: { lesson: Lesson }) {
+  const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState(false)
   const [addingMaterial, setAddingMaterial] = useState(false)
   const [matTitle, setMatTitle] = useState('')
@@ -415,6 +419,8 @@ function LessonItem({ lesson }: { lesson: Lesson }) {
           setMatUrl('')
           setMatType('VIDEO')
           setAddingMaterial(false)
+          // Explicitly invalidate so the materials list refreshes immediately
+          queryClient.invalidateQueries({ queryKey: ['lessons', lesson.id, 'materials'] })
         },
       },
     )
@@ -569,6 +575,7 @@ function LessonItem({ lesson }: { lesson: Lesson }) {
 // ── ModuleItem ──────────────────────────────────────────────────────────────
 
 function ModuleItem({ module, courseId }: { module: CourseModule; courseId: string }) {
+  const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState(false)
   const [addingLesson, setAddingLesson] = useState(false)
   const [lessonTitle, setLessonTitle] = useState('')
@@ -592,6 +599,11 @@ function ModuleItem({ module, courseId }: { module: CourseModule; courseId: stri
           setLessonTitle('')
           setLessonDuration('')
           setAddingLesson(false)
+          // Explicitly invalidate lessons list and the parent modules query
+          queryClient.invalidateQueries({
+            queryKey: ['courses', courseId, 'modules', module.id, 'lessons'],
+          })
+          queryClient.invalidateQueries({ queryKey: ['courses', courseId, 'modules'] })
         },
       },
     )
@@ -1120,6 +1132,8 @@ export default function TeacherCourseManagePage({
         onSuccess: () => {
           setModuleTitle('')
           setAddingModule(false)
+          // Explicitly invalidate modules list so the new module appears immediately
+          queryClient.invalidateQueries({ queryKey: ['courses', courseId, 'modules'] })
         },
       },
     )
