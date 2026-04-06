@@ -23,7 +23,7 @@ interface MulterFile {
 }
 
 /** 50 MB — generous limit for voice memos, images, and PDF documents. */
-const MAX_BYTES = 50 * 1024 * 1024;
+const MAX_BYTES = 50 * 1024 * 1024 * 1024;
 
 /** Allowed MIME type prefixes / exact types for chat attachments. */
 const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/'];
