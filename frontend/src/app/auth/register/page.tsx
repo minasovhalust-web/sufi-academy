@@ -11,20 +11,38 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRegister } from '@/hooks/api/useAuth'
-import { Eye, EyeOff } from 'lucide-react'
+import { Check, Eye, EyeOff, X } from 'lucide-react'
 
 const registerSchema = z
   .object({
     firstName: z.string().min(2, 'Имя должно быть не менее 2 символов'),
     lastName: z.string().min(2, 'Фамилия должна быть не менее 2 символов'),
     email: z.string().email('Некорректный email'),
-    password: z.string().min(6, 'Пароль должен быть не менее 6 символов'),
+    password: z
+      .string()
+      .min(8, 'Пароль должен быть не менее 8 символов')
+      .regex(/[A-Z]/, 'Пароль должен содержать хотя бы одну заглавную букву')
+      .regex(/\d/, 'Пароль должен содержать хотя бы одну цифру'),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Пароли не совпадают',
     path: ['confirmPassword'],
   })
+
+// ── Password requirement hint row ──────────────────────────────────────────────
+function PasswordHint({ met, label }: { met: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {met ? (
+        <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+      ) : (
+        <X className="h-3.5 w-3.5 text-red-400 shrink-0" />
+      )}
+      <span className={`text-xs ${met ? 'text-green-600' : 'text-red-400'}`}>{label}</span>
+    </div>
+  )
+}
 
 type RegisterFormData = z.infer<typeof registerSchema>
 
@@ -42,10 +60,16 @@ export default function RegisterPage() {
   const {
     register: registerField,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
   })
+
+  const passwordValue = watch('password') ?? ''
+  const pwHasMinLength = passwordValue.length >= 8
+  const pwHasUpperCase = /[A-Z]/.test(passwordValue)
+  const pwHasDigit = /\d/.test(passwordValue)
 
   const onSubmit = (data: RegisterFormData) => {
     register(
@@ -138,6 +162,20 @@ export default function RegisterPage() {
                 </button>
               </div>
               {errors.password && <p className="text-xs text-red-600">{errors.password.message}</p>}
+
+              {/* Real-time password requirements */}
+              {passwordValue.length > 0 && (
+                <div className="mt-2 space-y-1 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                  <PasswordHint met={pwHasMinLength} label="Минимум 8 символов" />
+                  <PasswordHint met={pwHasUpperCase} label="Хотя бы одна заглавная буква" />
+                  <PasswordHint met={pwHasDigit} label="Хотя бы одна цифра" />
+                </div>
+              )}
+              {passwordValue.length === 0 && (
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  Пароль должен содержать минимум 8 символов, одну заглавную букву и одну цифру
+                </p>
+              )}
             </div>
 
             {/* Confirm Password */}

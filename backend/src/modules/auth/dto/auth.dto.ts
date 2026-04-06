@@ -8,7 +8,9 @@ export class LoginDto {
 export class RegisterDto {
   @IsEmail() @IsNotEmpty() email: string;
   @IsString() @MinLength(8) @MaxLength(64)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&_\-#])[A-Za-z\d@$!%*?&_\-#]+$/, { message: 'Password too weak.' })
+  @Matches(/^(?=.*[A-Z])(?=.*\d)/, {
+    message: 'Password must contain at least one uppercase letter and one digit.',
+  })
   password: string;
   @IsString() @IsNotEmpty() @MaxLength(50) firstName: string;
   @IsString() @IsNotEmpty() @MaxLength(50) lastName: string;
