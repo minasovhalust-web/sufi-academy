@@ -27,6 +27,29 @@ interface Participant {
   handRaised: boolean
 }
 
+/** Raw participant from session-state (DB shape — names nested inside `user`). */
+interface RawParticipant {
+  userId: string
+  role: string
+  micEnabled: boolean
+  handRaised: boolean
+  user?: { id: string; firstName: string; lastName: string }
+  firstName?: string
+  lastName?: string
+}
+
+/** Normalize a raw participant (from session-state or participant-joined) into flat shape. */
+function normalizeParticipant(raw: RawParticipant): Participant {
+  return {
+    userId: raw.userId ?? raw.user?.id ?? '',
+    firstName: raw.firstName ?? raw.user?.firstName ?? '',
+    lastName: raw.lastName ?? raw.user?.lastName ?? '',
+    role: (raw.role ?? 'STUDENT') as 'HOST' | 'STUDENT',
+    micEnabled: raw.micEnabled ?? false,
+    handRaised: raw.handRaised ?? false,
+  }
+}
+
 interface WebRtcSignalPayload {
   type: 'offer' | 'answer' | 'candidate'
   sdp?: string
@@ -239,11 +262,13 @@ function LiveChatPanel({
 function ParticipantsPanel({
   participants,
   currentUserId,
+  isHost: isCurrentUserHost,
   onAllowSpeak,
   onRevokeSpeak,
 }: {
   participants: Record<string, Participant>
   currentUserId: string
+  isHost: boolean
   onAllowSpeak: (userId: string) => void
   onRevokeSpeak: (userId: string) => void
 }) {
@@ -286,14 +311,15 @@ function ParticipantsPanel({
               </div>
             </div>
 
-            {/* Mic status + control button (students only) */}
-            {p.role === 'STUDENT' && (
-              <div className="flex items-center gap-1.5 shrink-0">
-                {p.micEnabled ? (
-                  <Mic className="h-4 w-4 text-green-400" />
-                ) : (
-                  <MicOff className="h-4 w-4 text-gray-500" />
-                )}
+            {/* Mic status indicator */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {p.micEnabled ? (
+                <Mic className="h-4 w-4 text-green-400" />
+              ) : (
+                <MicOff className="h-4 w-4 text-gray-500" />
+              )}
+              {/* Mic control buttons — host only, for students */}
+              {isCurrentUserHost && p.role === 'STUDENT' && (
                 <button
                   onClick={() =>
                     p.micEnabled ? onRevokeSpeak(p.userId) : onAllowSpeak(p.userId)
@@ -316,8 +342,8 @@ function ParticipantsPanel({
                     </>
                   )}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))
       )}
@@ -375,8 +401,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   const isHostRef = useRef(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
+  const sessionRef = useRef<LiveSession | null>(null)
 
   useEffect(() => { userIdRef.current = user?.id }, [user?.id])
+  useEffect(() => { sessionRef.current = session }, [session])
 
   // ── isHost — update ref whenever it changes ────────────────────────────────
   const isHost = !!(user?.id && session?.hostId && user.id === session.hostId)
@@ -535,8 +563,12 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (aborted) return
         setSession(state.session)
 
+        // Normalize participants — session-state returns DB shape with nested user object
         const map: Record<string, Participant> = {}
-        for (const p of state.participants) map[p.userId] = p
+        for (const raw of state.participants as unknown as RawParticipant[]) {
+          const p = normalizeParticipant(raw)
+          map[p.userId] = p
+        }
         setParticipants(map)
 
         // Host: keep audio enabled by default
@@ -570,9 +602,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       })
 
       // ── Participant joined ───────────────────────────────────────────────
-      socket.on('participant-joined', (data: Participant) => {
+      socket.on('participant-joined', (data: RawParticipant) => {
         if (!aborted) {
-          setParticipants((prev) => ({ ...prev, [data.userId]: data }))
+          const p = normalizeParticipant(data)
+          setParticipants((prev) => ({ ...prev, [p.userId]: p }))
         }
       })
 
@@ -736,9 +769,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (!aborted) setChatMessages((prev) => [...prev, msg])
       })
 
-      // ── Session ended ────────────────────────────────────────────────────
-      socket.on('session-ended', () => {
-        if (!aborted) router.push('/dashboard')
+      // ── Session ended — redirect everyone to the course page ────────────
+      socket.on('session-ended', (data: { sessionId: string; endedAt?: string }) => {
+        if (aborted) return
+        // Clean up local media and peers
+        localStreamRef.current?.getTracks().forEach((t) => t.stop())
+        Object.values(peersRef.current).forEach((pc) => pc.close())
+        peersRef.current = {}
+        socket?.disconnect()
+        // Navigate to course page if courseId known, otherwise dashboard
+        const courseId = sessionRef.current?.courseId
+        router.push(courseId ? `/learn/${courseId}` : '/dashboard')
       })
     }
 
@@ -1173,19 +1214,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <MessageCircle className="h-3.5 w-3.5" />
                 Чат
               </button>
-              {isHost && (
-                <button
-                  onClick={() => setSidebarTab('participants')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
-                    sidebarTab === 'participants'
-                      ? 'text-white border-b-2 border-indigo-500'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  Участники
-                </button>
-              )}
+              <button
+                onClick={() => setSidebarTab('participants')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                  sidebarTab === 'participants'
+                    ? 'text-white border-b-2 border-indigo-500'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Участники ({Object.keys(participants).length})
+              </button>
             </div>
 
             {/* Sidebar content */}
@@ -1202,6 +1241,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
+                  isHost={isHost}
                   onAllowSpeak={handleAllowSpeak}
                   onRevokeSpeak={handleRevokeSpeak}
                 />
@@ -1314,19 +1354,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             <span className="text-[10px] leading-none">Чат</span>
           </button>
 
-          {/* Mobile: Participants button (host only) */}
-          {isHost && (
-            <button
-              onClick={() => { setMobileDrawerTab('participants'); setMobileDrawerOpen(true) }}
-              className="sm:hidden flex flex-col items-center gap-1 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors min-w-[52px] min-h-[52px] justify-center px-2"
-              title="Участники"
-            >
-              <Users className="h-5 w-5" />
-              <span className="text-[10px] leading-none">
-                {Object.keys(participants).length}
-              </span>
-            </button>
-          )}
+          {/* Mobile: Participants button */}
+          <button
+            onClick={() => { setMobileDrawerTab('participants'); setMobileDrawerOpen(true) }}
+            className="sm:hidden flex flex-col items-center gap-1 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors min-w-[52px] min-h-[52px] justify-center px-2"
+            title="Участники"
+          >
+            <Users className="h-5 w-5" />
+            <span className="text-[10px] leading-none">
+              {Object.keys(participants).length}
+            </span>
+          </button>
 
           {/* Separator (mobile) */}
           <div className="sm:hidden w-px h-8 bg-gray-700 mx-0.5" />
@@ -1380,19 +1418,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                   <MessageCircle className="h-3.5 w-3.5" />
                   Чат
                 </button>
-                {isHost && (
-                  <button
-                    onClick={() => setMobileDrawerTab('participants')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
-                      mobileDrawerTab === 'participants'
-                        ? 'text-white border-b-2 border-indigo-500'
-                        : 'text-gray-400'
-                    }`}
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    Участники ({Object.keys(participants).length})
-                  </button>
-                )}
+                <button
+                  onClick={() => setMobileDrawerTab('participants')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                    mobileDrawerTab === 'participants'
+                      ? 'text-white border-b-2 border-indigo-500'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                  Участники ({Object.keys(participants).length})
+                </button>
                 <button
                   onClick={() => setMobileDrawerOpen(false)}
                   className="flex items-center justify-center px-4 text-gray-400 hover:text-white"
@@ -1416,6 +1452,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
+                  isHost={isHost}
                   onAllowSpeak={handleAllowSpeak}
                   onRevokeSpeak={handleRevokeSpeak}
                 />
