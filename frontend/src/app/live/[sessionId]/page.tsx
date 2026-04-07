@@ -476,10 +476,21 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
     return pc
   }, [])
 
+  // ── Stable ref for router (avoids stale closures) ──────────────────────────
+  const routerRef = useRef(router)
+  useEffect(() => { routerRef.current = router }, [router])
+
   // ── Main initialization effect ─────────────────────────────────────────────
+  // Runs ONCE on mount (empty deps). All mutable values accessed via refs to
+  // avoid stale closures and prevent listener duplication on re-renders.
+  // accessToken is read from a ref so the effect doesn't re-run on token refresh.
+  const accessTokenRef = useRef(accessToken)
+  useEffect(() => { accessTokenRef.current = accessToken }, [accessToken])
+
   useEffect(() => {
-    if (!accessToken) {
-      router.push('/auth/login')
+    const token = accessTokenRef.current
+    if (!token) {
+      routerRef.current.push('/auth/login')
       return
     }
 
@@ -499,10 +510,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       // 2. Acquire local media
-      // We try video+audio first (for host). If that fails, try video-only
-      // (students typically don't need audio at init — they get it lazily
-      // via mic-granted). If video also fails, create an empty stream so
-      // the rest of the flow still works.
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -510,7 +517,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         } catch {
-          // No camera available (common for students on phones) — create empty stream
           stream = new MediaStream()
         }
       }
@@ -523,47 +529,46 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       localStreamRef.current = stream
       setLocalStream(stream)
 
-      // Mute audio track by default — host will enable it in session-state handler
       const audioTrack = stream.getAudioTracks()[0]
       if (audioTrack) audioTrack.enabled = false
       setIsAudioEnabled(false)
 
-      // 3. Connect WebSocket
+      // 3. Connect WebSocket — single connection for entire session lifetime
       socket = io(`${WS_URL}/live`, {
-        auth: { token: accessToken },
+        auth: { token },
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: 5,
       })
       socketRef.current = socket
 
-      socket.on('connect', () => {
-        if (!aborted) {
-          setIsConnected(true)
-          socket!.emit('join-session', { sessionId })
-          setIsInitializing(false)
-        }
-      })
+      // ── Register ALL event handlers once on this socket instance ────────
+      // Using named functions so each .on() is unique and .off() is precise.
 
-      socket.on('connect_error', () => {
+      function onConnect() {
+        if (aborted) return
+        setIsConnected(true)
+        socket!.emit('join-session', { sessionId: sessionIdRef.current })
+        setIsInitializing(false)
+      }
+
+      function onConnectError() {
         if (!aborted) setError('Не удалось подключиться к серверу')
         setIsInitializing(false)
-      })
+      }
 
-      socket.on('disconnect', () => {
+      function onDisconnect() {
         if (!aborted) setIsConnected(false)
-      })
+      }
 
-      socket.on('exception', (data: { message: string }) => {
+      function onException(data: { message: string }) {
         if (!aborted) setError(data.message)
-      })
+      }
 
-      // ── Session state ────────────────────────────────────────────────────
-      socket.on('session-state', async (state: SessionStatePayload) => {
+      async function onSessionState(state: SessionStatePayload) {
         if (aborted) return
         setSession(state.session)
 
-        // Normalize participants — session-state returns DB shape with nested user object
         const map: Record<string, Participant> = {}
         for (const raw of state.participants as unknown as RawParticipant[]) {
           const p = normalizeParticipant(raw)
@@ -571,7 +576,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
         setParticipants(map)
 
-        // Host: keep audio enabled by default
         const currentlyHost =
           !!userIdRef.current &&
           !!state.session.hostId &&
@@ -583,7 +587,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           isHostRef.current = true
         }
 
-        // Create WebRTC offers for all existing participants
         for (const p of state.participants) {
           if (p.userId === userIdRef.current) continue
           try {
@@ -591,7 +594,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             const offer = await pc.createOffer()
             await pc.setLocalDescription(offer)
             socket!.emit('webrtc-signal', {
-              sessionId,
+              sessionId: sessionIdRef.current,
               targetUserId: p.userId,
               signal: { type: 'offer', sdp: offer.sdp },
             })
@@ -599,18 +602,15 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             console.error('[webrtc] Failed to create offer to', p.userId, e)
           }
         }
-      })
+      }
 
-      // ── Participant joined ───────────────────────────────────────────────
-      socket.on('participant-joined', (data: RawParticipant) => {
-        if (!aborted) {
-          const p = normalizeParticipant(data)
-          setParticipants((prev) => ({ ...prev, [p.userId]: p }))
-        }
-      })
+      function onParticipantJoined(data: RawParticipant) {
+        if (aborted) return
+        const p = normalizeParticipant(data)
+        setParticipants((prev) => ({ ...prev, [p.userId]: p }))
+      }
 
-      // ── Participant left ─────────────────────────────────────────────────
-      socket.on('participant-left', (data: { userId: string }) => {
+      function onParticipantLeft(data: { userId: string }) {
         if (aborted) return
         setParticipants((prev) => {
           const next = { ...prev }
@@ -626,13 +626,11 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           peersRef.current[data.userId].close()
           delete peersRef.current[data.userId]
         }
-      })
+      }
 
-      // ── WebRTC signaling ─────────────────────────────────────────────────
-      socket.on('webrtc-signal', async (data: IncomingSignal) => {
+      async function onWebRtcSignal(data: IncomingSignal) {
         if (aborted) return
         const { fromUserId, signal } = data
-
         try {
           if (signal.type === 'offer') {
             const pc = createPeer(fromUserId)
@@ -642,7 +640,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             const answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
             socket!.emit('webrtc-signal', {
-              sessionId,
+              sessionId: sessionIdRef.current,
               targetUserId: fromUserId,
               signal: { type: 'answer', sdp: answer.sdp },
             })
@@ -662,28 +660,22 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         } catch (e) {
           console.error('[webrtc] Signal error:', signal.type, e)
         }
-      })
+      }
 
-      // ── mic-granted (sent directly to this student's socket) ────────────
-      // Acquire microphone on demand, add audio track to all peers, renegotiate.
-      socket.on('mic-granted', async (data: { userId: string }) => {
+      async function onMicGranted(data: { userId: string }) {
         if (aborted) return
-        // This event is targeted — only the granted student receives it.
-        // Ignore if it's not for us (safety check).
         if (data.userId !== userIdRef.current) return
 
         toast.success('Вам разрешили говорить', { duration: 4000 })
 
         try {
-          // Acquire audio on demand — this is the first time we ask for mic
           const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-          const audioTrack = audioStream.getAudioTracks()[0]
-          if (!audioTrack) return
+          const newAudioTrack = audioStream.getAudioTracks()[0]
+          if (!newAudioTrack) return
 
-          // Merge the new audio track into the existing local stream
           const existingStream = localStreamRef.current
           if (existingStream) {
-            existingStream.addTrack(audioTrack)
+            existingStream.addTrack(newAudioTrack)
           } else {
             localStreamRef.current = audioStream
             setLocalStream(audioStream)
@@ -692,11 +684,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           setIsAudioEnabled(true)
           setMicAllowedByHost(true)
 
-          // Add audio track to ALL existing peer connections + renegotiate
-          const stream = localStreamRef.current!
+          const s = localStreamRef.current!
           for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
             try {
-              pc.addTrack(audioTrack, stream)
+              pc.addTrack(newAudioTrack, s)
               const offer = await pc.createOffer()
               await pc.setLocalDescription(offer)
               socket!.emit('webrtc-signal', {
@@ -712,26 +703,21 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           console.error('[mic-granted] getUserMedia failed:', err)
           toast.error('Не удалось получить доступ к микрофону')
         }
-      })
+      }
 
-      // ── mic-revoked (sent directly to this student's socket) ────────────
-      // Stop audio tracks, remove from all peers, renegotiate.
-      socket.on('mic-revoked', async (data: { userId: string }) => {
+      async function onMicRevoked(data: { userId: string }) {
         if (aborted) return
         if (data.userId !== userIdRef.current) return
 
         toast.info('Ваш микрофон отключён', { duration: 4000 })
 
-        const stream = localStreamRef.current
-        if (stream) {
-          // Stop and remove all audio tracks
-          for (const track of stream.getAudioTracks()) {
+        const s = localStreamRef.current
+        if (s) {
+          for (const track of s.getAudioTracks()) {
             track.stop()
-            stream.removeTrack(track)
-
-            // Remove the sender from every peer connection + renegotiate
+            s.removeTrack(track)
             for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
-              const sender = pc.getSenders().find(s => s.track === track)
+              const sender = pc.getSenders().find(snd => snd.track === track)
               if (sender) {
                 try { pc.removeTrack(sender) } catch { /* already removed */ }
               }
@@ -749,38 +735,47 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             }
           }
         }
-
         setIsAudioEnabled(false)
         setMicAllowedByHost(false)
-      })
+      }
 
-      // ── mic-state-changed: broadcast to room for UI updates ─────────────
-      socket.on('mic-state-changed', (data: { userId: string; micEnabled?: boolean }) => {
+      function onMicStateChanged(data: { userId: string; micEnabled?: boolean }) {
         if (aborted) return
         setParticipants((prev) => {
           if (!prev[data.userId]) return prev
           const micEnabled = data.micEnabled ?? !prev[data.userId].micEnabled
           return { ...prev, [data.userId]: { ...prev[data.userId], micEnabled, handRaised: false } }
         })
-      })
+      }
 
-      // ── Live chat — append messages to parent state ─────────────────────
-      socket.on('live-chat-message', (msg: ChatMessage) => {
+      function onChatMessage(msg: ChatMessage) {
         if (!aborted) setChatMessages((prev) => [...prev, msg])
-      })
+      }
 
-      // ── Session ended — redirect everyone to the course page ────────────
-      socket.on('session-ended', (data: { sessionId: string; endedAt?: string }) => {
+      function onSessionEnded() {
         if (aborted) return
-        // Clean up local media and peers
         localStreamRef.current?.getTracks().forEach((t) => t.stop())
         Object.values(peersRef.current).forEach((pc) => pc.close())
         peersRef.current = {}
         socket?.disconnect()
-        // Navigate to course page if courseId known, otherwise dashboard
         const courseId = sessionRef.current?.courseId
-        router.push(courseId ? `/learn/${courseId}` : '/dashboard')
-      })
+        routerRef.current.push(courseId ? `/learn/${courseId}` : '/dashboard')
+      }
+
+      // Bind all listeners
+      socket.on('connect', onConnect)
+      socket.on('connect_error', onConnectError)
+      socket.on('disconnect', onDisconnect)
+      socket.on('exception', onException)
+      socket.on('session-state', onSessionState)
+      socket.on('participant-joined', onParticipantJoined)
+      socket.on('participant-left', onParticipantLeft)
+      socket.on('webrtc-signal', onWebRtcSignal)
+      socket.on('mic-granted', onMicGranted)
+      socket.on('mic-revoked', onMicRevoked)
+      socket.on('mic-state-changed', onMicStateChanged)
+      socket.on('live-chat-message', onChatMessage)
+      socket.on('session-ended', onSessionEnded)
     }
 
     initialize()
@@ -790,11 +785,16 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       localStreamRef.current?.getTracks().forEach((t) => t.stop())
       Object.values(peersRef.current).forEach((pc) => pc.close())
       peersRef.current = {}
-      socket?.emit('leave-session', { sessionId })
-      socket?.disconnect()
+      if (socket) {
+        socket.emit('leave-session', { sessionId: sessionIdRef.current })
+        // Remove all listeners before disconnect to prevent ghost handlers
+        socket.removeAllListeners()
+        socket.disconnect()
+      }
+      socketRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken])
+  }, [])
 
   // ── Controls ───────────────────────────────────────────────────────────────
 

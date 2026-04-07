@@ -4,15 +4,15 @@
   "/admin/page": "app/admin/page.js",
   "/auth/verify-email/page": "app/auth/verify-email/page.js",
   "/courses/page": "app/courses/page.js",
+  "/live/[sessionId]/page": "app/live/[sessionId]/page.js",
   "/courses/[id]/page": "app/courses/[id]/page.js",
   "/dashboard/page": "app/dashboard/page.js",
-  "/live/[sessionId]/page": "app/live/[sessionId]/page.js",
-  "/messages/[userId]/page": "app/messages/[userId]/page.js",
-  "/auth/register/page": "app/auth/register/page.js",
   "/page": "app/page.js",
-  "/learn/[courseId]/page": "app/learn/[courseId]/page.js",
+  "/messages/[userId]/page": "app/messages/[userId]/page.js",
   "/messages/page": "app/messages/page.js",
-  "/settings/page": "app/settings/page.js",
+  "/learn/[courseId]/page": "app/learn/[courseId]/page.js",
+  "/teacher/page": "app/teacher/page.js",
   "/teacher/courses/[id]/page": "app/teacher/courses/[id]/page.js",
-  "/teacher/page": "app/teacher/page.js"
+  "/settings/page": "app/settings/page.js",
+  "/auth/register/page": "app/auth/register/page.js"
 }
