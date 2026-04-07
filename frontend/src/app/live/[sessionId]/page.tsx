@@ -155,24 +155,16 @@ function LiveChatPanel({
   sessionId,
   currentUserId,
   currentUserName,
+  messages,
 }: {
   socket: Socket | null
   sessionId: string
   currentUserId: string
   currentUserName: string
+  messages: ChatMessage[]
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!socket) return
-    const handler = (msg: ChatMessage) => {
-      setMessages((prev) => [...prev, msg])
-    }
-    socket.on('live-chat-message', handler)
-    return () => { socket.off('live-chat-message', handler) }
-  }, [socket])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -355,6 +347,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat')
 
+  // ── Chat (state lives here so messages survive sidebar open/close) ────────
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+
   // ── Recording ──────────────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false)
   const [isUploadingRecording, setIsUploadingRecording] = useState(false)
@@ -384,19 +379,13 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-    // Host: add all tracks immediately (video + audio always enabled).
-    // Student: add NO audio track yet — it will be added dynamically when the
-    // host emits grant-mic → backend broadcasts mic-granted. Only video tracks
-    // (if any) are added for students, but since students have no camera in
-    // this app the student peer starts with zero senders.
+    // Always add ALL tracks (audio + video) for both host and student.
+    // Student audio starts with track.enabled = false — the host toggles it
+    // via grant-mic / revoke-mic which simply flips track.enabled.
+    // This avoids dynamic addTrack/removeTrack + renegotiation complexity.
     const stream = localStreamRef.current
     if (stream) {
-      if (isHostRef.current) {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream))
-      } else {
-        // Students: only add video (camera) tracks; skip audio — managed by host
-        stream.getVideoTracks().forEach((track) => pc.addTrack(track, stream))
-      }
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
     }
 
     pc.onicecandidate = (event) => {
@@ -623,7 +612,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
       // ── mic-granted: backend broadcasts when host calls grant-mic ────────
       // Payload: { userId, sessionId }
-      socket.on('mic-granted', async (data: { userId: string }) => {
+      // Audio track is already added to peer connections (with enabled=false).
+      // We simply flip track.enabled — no renegotiation needed.
+      socket.on('mic-granted', (data: { userId: string }) => {
         if (aborted) return
 
         // Update participant list UI for everyone
@@ -636,40 +627,15 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         // Only the targeted student actually enables their microphone
         if (data.userId !== userIdRef.current) return
 
-        const stream = localStreamRef.current
-        const track = stream?.getAudioTracks()[0]
-        if (!track || !stream) return
-
-        // Enable the audio track
-        track.enabled = true
+        const track = localStreamRef.current?.getAudioTracks()[0]
+        if (track) track.enabled = true
         setIsAudioEnabled(true)
         setMicAllowedByHost(true)
-
-        // Add the audio track to ALL existing RTCPeerConnections, then
-        // renegotiate each connection so the remote peers start receiving audio.
-        for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
-          try {
-            // Only add if not already present (guard against double-grant)
-            const alreadyAdded = pc.getSenders().some(s => s.track === track)
-            if (!alreadyAdded) {
-              pc.addTrack(track, stream)
-            }
-            // Renegotiate so the remote peer learns about the new audio sender
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            socket!.emit('webrtc-signal', {
-              sessionId: sessionIdRef.current,
-              targetUserId,
-              signal: { type: 'offer', sdp: offer.sdp },
-            })
-          } catch (e) {
-            console.error('[webrtc] mic-granted renegotiation failed for', targetUserId, e)
-          }
-        }
       })
 
       // ── mic-revoked: backend broadcasts when host calls revoke-mic ────────
       // Payload: { userId, sessionId }
+      // Audio track stays in peer connections — we just disable it.
       socket.on('mic-revoked', (data: { userId: string }) => {
         if (aborted) return
 
@@ -684,19 +650,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (data.userId !== userIdRef.current) return
 
         const track = localStreamRef.current?.getAudioTracks()[0]
-        if (track) {
-          track.enabled = false
-          // Remove the audio sender from every peer connection so remote peers
-          // stop receiving audio immediately without waiting for renegotiation
-          for (const pc of Object.values(peersRef.current)) {
-            const sender = pc.getSenders().find(s => s.track === track)
-            if (sender) {
-              try { pc.removeTrack(sender) } catch { /* ignore if already removed */ }
-            }
-          }
-        }
+        if (track) track.enabled = false
         setIsAudioEnabled(false)
         setMicAllowedByHost(false)
+      })
+
+      // ── Live chat — append messages to parent state ─────────────────────
+      socket.on('live-chat-message', (msg: ChatMessage) => {
+        if (!aborted) setChatMessages((prev) => [...prev, msg])
       })
 
       // ── Session ended ────────────────────────────────────────────────────
@@ -797,7 +758,23 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       : 'video/mp4'
 
     try {
-      const recorder = new MediaRecorder(localStreamRef.current, { mimeType })
+      // Build a combined stream: local video + local audio (force-enabled for recording).
+      // This ensures the recording always captures audio even if the track was toggled off in UI.
+      const recordingStream = new MediaStream()
+
+      // Add all video tracks from local stream
+      for (const vt of localStreamRef.current.getVideoTracks()) {
+        recordingStream.addTrack(vt)
+      }
+
+      // Add local audio — temporarily enable so MediaRecorder captures it
+      for (const at of localStreamRef.current.getAudioTracks()) {
+        at.enabled = true
+        recordingStream.addTrack(at)
+      }
+      setIsAudioEnabled(true)
+
+      const recorder = new MediaRecorder(recordingStream, { mimeType })
       recordedChunksRef.current = []
 
       recorder.ondataavailable = (e) => {
@@ -1158,6 +1135,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                     sessionId={sessionId}
                     currentUserId={user?.id ?? ''}
                     currentUserName={user ? `${user.firstName} ${user.lastName}` : ''}
+                    messages={chatMessages}
                   />
                 ) : (
                   <ParticipantsPanel
