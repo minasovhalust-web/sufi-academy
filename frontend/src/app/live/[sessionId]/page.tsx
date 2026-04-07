@@ -665,11 +665,23 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
         toast.success('Вам разрешили говорить', { duration: 4000 })
 
-        // Audio track was added to the peer connection from the start (disabled).
-        // Just flip enabled = true — no renegotiation needed.
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
         if (audioTrack) {
           audioTrack.enabled = true
+          // Renegotiate with all peers to send audio
+          Object.entries(peersRef.current).forEach(async ([peerId, pc]) => {
+            try {
+              const offer = await pc.createOffer()
+              await pc.setLocalDescription(offer)
+              socketRef.current?.emit('webrtc-signal', {
+                sessionId: sessionIdRef.current,
+                targetUserId: peerId,
+                signal: { type: 'offer', sdp: offer.sdp },
+              })
+            } catch (e) {
+              console.error('[mic-granted] renegotiation failed', e)
+            }
+          })
         }
         setIsAudioEnabled(true)
         setMicAllowedByHost(true)
