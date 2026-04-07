@@ -12,7 +12,7 @@ import {
   Mic, MicOff, Video as VideoIcon, VideoOff,
   PhoneOff, Radio, Users, Loader2, AlertCircle,
   MessageCircle, X, ChevronDown,
-  UserCheck, Square, Circle,
+  Square, Circle,
 } from 'lucide-react'
 import type { LiveSession } from '@/types'
 
@@ -263,90 +263,92 @@ function ParticipantsPanel({
   participants,
   currentUserId,
   isHost: isCurrentUserHost,
-  onAllowSpeak,
-  onRevokeSpeak,
+  onMuteUser,
+  onMuteAll,
 }: {
   participants: Record<string, Participant>
   currentUserId: string
   isHost: boolean
-  onAllowSpeak: (userId: string) => void
-  onRevokeSpeak: (userId: string) => void
+  onMuteUser: (userId: string) => void
+  onMuteAll: () => void
 }) {
   const list = Object.values(participants).filter((p) => p.userId !== currentUserId)
+  const students = list.filter((p) => p.role === 'STUDENT')
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto p-3 space-y-2">
-      {list.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
-          <Users className="h-8 w-8 opacity-40" />
-          <p className="text-xs">Нет участников</p>
-        </div>
-      ) : (
-        list.map((p) => (
-          <div
-            key={p.userId}
-            className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
+    <div className="flex flex-col h-full">
+      {/* Mute-all button for host */}
+      {isCurrentUserHost && students.length > 0 && (
+        <div className="px-3 pt-3 pb-1 shrink-0">
+          <button
+            onClick={onMuteAll}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-medium transition-colors"
           >
-            {/* Avatar */}
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-              <span className="text-white font-bold text-sm select-none">
-                {getInitials(`${p.firstName} ${p.lastName}`)}
-              </span>
-            </div>
+            <MicOff className="h-3.5 w-3.5" />
+            Заглушить всех студентов
+          </button>
+        </div>
+      )}
 
-            {/* Name — large and prominent */}
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-base font-semibold truncate leading-tight">
-                {p.firstName} {p.lastName}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-gray-400 text-xs">
-                  {p.role === 'HOST' ? 'Хост' : 'Студент'}
+      {/* Participants list */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {list.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
+            <Users className="h-8 w-8 opacity-40" />
+            <p className="text-xs">Нет участников</p>
+          </div>
+        ) : (
+          list.map((p) => (
+            <div
+              key={p.userId}
+              className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
+            >
+              {/* Avatar */}
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+                <span className="text-white font-bold text-sm select-none">
+                  {getInitials(`${p.firstName} ${p.lastName}`)}
                 </span>
-                {p.handRaised && (
-                  <span className="text-yellow-400 text-xs font-medium animate-pulse">
-                    &#9995; Рука поднята
+              </div>
+
+              {/* Name */}
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-base font-semibold truncate leading-tight">
+                  {p.firstName} {p.lastName}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-gray-400 text-xs">
+                    {p.role === 'HOST' ? 'Хост' : 'Студент'}
                   </span>
+                  {p.handRaised && (
+                    <span className="text-yellow-400 text-xs font-medium animate-pulse">
+                      &#9995; Рука поднята
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Mic status + mute button */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {p.micEnabled ? (
+                  <Mic className="h-4 w-4 text-green-400" />
+                ) : (
+                  <MicOff className="h-4 w-4 text-gray-500" />
+                )}
+                {/* Host can mute any student */}
+                {isCurrentUserHost && p.role === 'STUDENT' && p.micEnabled && (
+                  <button
+                    onClick={() => onMuteUser(p.userId)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors bg-red-600/30 hover:bg-red-600/50 text-red-300"
+                  >
+                    <MicOff className="h-3.5 w-3.5" />
+                    <span>Заглушить</span>
+                  </button>
                 )}
               </div>
             </div>
-
-            {/* Mic status indicator */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              {p.micEnabled ? (
-                <Mic className="h-4 w-4 text-green-400" />
-              ) : (
-                <MicOff className="h-4 w-4 text-gray-500" />
-              )}
-              {/* Mic control buttons — host only, for students */}
-              {isCurrentUserHost && p.role === 'STUDENT' && (
-                <button
-                  onClick={() =>
-                    p.micEnabled ? onRevokeSpeak(p.userId) : onAllowSpeak(p.userId)
-                  }
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    p.micEnabled
-                      ? 'bg-red-600/30 hover:bg-red-600/50 text-red-300'
-                      : 'bg-green-600/30 hover:bg-green-600/50 text-green-300'
-                  }`}
-                >
-                  {p.micEnabled ? (
-                    <>
-                      <MicOff className="h-3.5 w-3.5" />
-                      <span>Заглушить</span>
-                    </>
-                  ) : (
-                    <>
-                      <UserCheck className="h-3.5 w-3.5" />
-                      <span>Разрешить</span>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        ))
-      )}
+          ))
+        )}
+      </div>
     </div>
   )
 }
@@ -363,10 +365,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Media state ────────────────────────────────────────────────────────────
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
-  const [isAudioEnabled, setIsAudioEnabled] = useState(false) // students start muted
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true) // everyone starts with mic on
   const [isVideoEnabled, setIsVideoEnabled] = useState(true)
-  // Whether the host has granted mic permission to this student
-  const [micAllowedByHost, setMicAllowedByHost] = useState(false)
 
   // ── Session / UI state ─────────────────────────────────────────────────────
   const [session, setSession] = useState<LiveSession | null>(null)
@@ -526,9 +526,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       localStreamRef.current = stream
       setLocalStream(stream)
 
+      // Audio enabled by default for everyone — anyone can speak
       const audioTrack = stream.getAudioTracks()[0]
-      if (audioTrack) audioTrack.enabled = false
-      setIsAudioEnabled(false)
+      if (audioTrack) audioTrack.enabled = true
+      setIsAudioEnabled(true)
 
       // 3. Connect WebSocket — single connection for entire session lifetime
       socket = io(`${WS_URL}/live`, {
@@ -578,9 +579,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           !!state.session.hostId &&
           userIdRef.current === state.session.hostId
         if (currentlyHost) {
-          const aTrack = localStreamRef.current?.getAudioTracks()[0]
-          if (aTrack) aTrack.enabled = true
-          setIsAudioEnabled(true)
           isHostRef.current = true
         }
 
@@ -663,44 +661,22 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (aborted) return
         if (data.userId !== userIdRef.current) return
 
-        toast.success('Вам разрешили говорить', { duration: 4000 })
+        toast.success('Микрофон включён преподавателем', { duration: 4000 })
 
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) {
-          audioTrack.enabled = true
-          // Renegotiate with all peers to send audio
-          Object.entries(peersRef.current).forEach(async ([peerId, pc]) => {
-            try {
-              const offer = await pc.createOffer()
-              await pc.setLocalDescription(offer)
-              socketRef.current?.emit('webrtc-signal', {
-                sessionId: sessionIdRef.current,
-                targetUserId: peerId,
-                signal: { type: 'offer', sdp: offer.sdp },
-              })
-            } catch (e) {
-              console.error('[mic-granted] renegotiation failed', e)
-            }
-          })
-        }
+        if (audioTrack) audioTrack.enabled = true
         setIsAudioEnabled(true)
-        setMicAllowedByHost(true)
       }
 
       function onMicRevoked(data: { userId: string }) {
         if (aborted) return
         if (data.userId !== userIdRef.current) return
 
-        toast.info('Ваш микрофон отключён', { duration: 4000 })
+        toast.info('Преподаватель отключил ваш микрофон', { duration: 4000 })
 
-        // Just disable the audio track — it stays in the peer connection
-        // so mic-granted can re-enable it without renegotiation.
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) {
-          audioTrack.enabled = false
-        }
+        if (audioTrack) audioTrack.enabled = false
         setIsAudioEnabled(false)
-        setMicAllowedByHost(false)
       }
 
       function onMicStateChanged(data: { userId: string; micEnabled?: boolean }) {
@@ -763,8 +739,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Controls ───────────────────────────────────────────────────────────────
 
   const toggleAudio = () => {
-    // Students can only toggle if host has allowed them
-    if (!isHost && !micAllowedByHost) return
     const track = localStreamRef.current?.getAudioTracks()[0]
     if (track) {
       track.enabled = !track.enabled
@@ -810,22 +784,31 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
     }
   }
 
-  // ── Host: allow / revoke student mic ──────────────────────────────────────
+  // ── Host: mute student mic ─────────────────────────────────────────────────
 
-  const handleAllowSpeak = (userId: string) => {
-    socketRef.current?.emit('grant-mic', { sessionId, targetUserId: userId })
-    // Optimistic update
-    setParticipants((prev) =>
-      prev[userId] ? { ...prev, [userId]: { ...prev[userId], micEnabled: true } } : prev
-    )
-  }
-
-  const handleRevokeSpeak = (userId: string) => {
+  const handleMuteUser = (userId: string) => {
     socketRef.current?.emit('revoke-mic', { sessionId, targetUserId: userId })
-    // Optimistic update
     setParticipants((prev) =>
       prev[userId] ? { ...prev, [userId]: { ...prev[userId], micEnabled: false } } : prev
     )
+  }
+
+  const handleMuteAll = () => {
+    const students = Object.values(participants).filter(
+      (p) => p.role === 'STUDENT' && p.userId !== user?.id
+    )
+    for (const s of students) {
+      socketRef.current?.emit('revoke-mic', { sessionId, targetUserId: s.userId })
+    }
+    setParticipants((prev) => {
+      const next = { ...prev }
+      for (const s of students) {
+        if (next[s.userId]) {
+          next[s.userId] = { ...next[s.userId], micEnabled: false }
+        }
+      }
+      return next
+    })
   }
 
   // ── Recording (host only) ──────────────────────────────────────────────────
@@ -1206,8 +1189,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                   participants={participants}
                   currentUserId={user?.id ?? ''}
                   isHost={isHost}
-                  onAllowSpeak={handleAllowSpeak}
-                  onRevokeSpeak={handleRevokeSpeak}
+                  onMuteUser={handleMuteUser}
+                  onMuteAll={handleMuteAll}
                 />
               )}
             </div>
@@ -1219,21 +1202,12 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       <div className="bg-gray-900 border-t border-gray-800 px-3 py-2 sm:px-4 sm:py-2.5 shrink-0 safe-area-bottom">
         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap">
 
-          {/* Microphone */}
+          {/* Microphone — available for everyone */}
           <button
             onClick={toggleAudio}
-            disabled={!isHost && !micAllowedByHost}
-            title={
-              !isHost && !micAllowedByHost
-                ? 'Микрофон заблокирован хостом'
-                : isAudioEnabled
-                ? 'Выключить микрофон'
-                : 'Включить микрофон'
-            }
+            title={isAudioEnabled ? 'Выключить микрофон' : 'Включить микрофон'}
             className={`flex flex-col items-center gap-1 rounded-xl transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2 ${
-              !isHost && !micAllowedByHost
-                ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
-                : isAudioEnabled
+              isAudioEnabled
                 ? 'bg-gray-700 hover:bg-gray-600 text-white'
                 : 'bg-red-600 hover:bg-red-700 text-white'
             }`}
@@ -1417,8 +1391,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                   participants={participants}
                   currentUserId={user?.id ?? ''}
                   isHost={isHost}
-                  onAllowSpeak={handleAllowSpeak}
-                  onRevokeSpeak={handleRevokeSpeak}
+                  onMuteUser={handleMuteUser}
+                  onMuteAll={handleMuteAll}
                 />
               )}
             </div>
