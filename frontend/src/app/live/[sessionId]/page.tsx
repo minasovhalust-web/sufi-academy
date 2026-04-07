@@ -418,16 +418,13 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-    // Host: add all tracks (video + audio).
-    // Student: add only video tracks. Audio is added lazily when mic-granted
-    // fires — the student calls getUserMedia({audio}) and adds the track then.
+    // Add ALL tracks (video + audio) for both host and student.
+    // Student's audio track is disabled but present — this ensures it's in the
+    // SDP from the start. On mic-granted we just flip track.enabled = true,
+    // no renegotiation needed.
     const stream = localStreamRef.current
     if (stream) {
-      if (isHostRef.current) {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream))
-      } else {
-        stream.getVideoTracks().forEach((track) => pc.addTrack(track, stream))
-      }
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
     }
 
     pc.onicecandidate = (event) => {
@@ -662,78 +659,33 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       }
 
-      async function onMicGranted(data: { userId: string }) {
+      function onMicGranted(data: { userId: string }) {
         if (aborted) return
         if (data.userId !== userIdRef.current) return
 
         toast.success('Вам разрешили говорить', { duration: 4000 })
 
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-          const newAudioTrack = audioStream.getAudioTracks()[0]
-          if (!newAudioTrack) return
-
-          const existingStream = localStreamRef.current
-          if (existingStream) {
-            existingStream.addTrack(newAudioTrack)
-          } else {
-            localStreamRef.current = audioStream
-            setLocalStream(audioStream)
-          }
-
-          setIsAudioEnabled(true)
-          setMicAllowedByHost(true)
-
-          const s = localStreamRef.current!
-          for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
-            try {
-              pc.addTrack(newAudioTrack, s)
-              const offer = await pc.createOffer()
-              await pc.setLocalDescription(offer)
-              socket!.emit('webrtc-signal', {
-                sessionId: sessionIdRef.current,
-                targetUserId,
-                signal: { type: 'offer', sdp: offer.sdp },
-              })
-            } catch (e) {
-              console.error('[webrtc] mic-granted renegotiation failed for', targetUserId, e)
-            }
-          }
-        } catch (err) {
-          console.error('[mic-granted] getUserMedia failed:', err)
-          toast.error('Не удалось получить доступ к микрофону')
+        // Audio track was added to the peer connection from the start (disabled).
+        // Just flip enabled = true — no renegotiation needed.
+        const audioTrack = localStreamRef.current?.getAudioTracks()[0]
+        if (audioTrack) {
+          audioTrack.enabled = true
         }
+        setIsAudioEnabled(true)
+        setMicAllowedByHost(true)
       }
 
-      async function onMicRevoked(data: { userId: string }) {
+      function onMicRevoked(data: { userId: string }) {
         if (aborted) return
         if (data.userId !== userIdRef.current) return
 
         toast.info('Ваш микрофон отключён', { duration: 4000 })
 
-        const s = localStreamRef.current
-        if (s) {
-          for (const track of s.getAudioTracks()) {
-            track.stop()
-            s.removeTrack(track)
-            for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
-              const sender = pc.getSenders().find(snd => snd.track === track)
-              if (sender) {
-                try { pc.removeTrack(sender) } catch { /* already removed */ }
-              }
-              try {
-                const offer = await pc.createOffer()
-                await pc.setLocalDescription(offer)
-                socket!.emit('webrtc-signal', {
-                  sessionId: sessionIdRef.current,
-                  targetUserId,
-                  signal: { type: 'offer', sdp: offer.sdp },
-                })
-              } catch (e) {
-                console.error('[webrtc] mic-revoked renegotiation failed for', targetUserId, e)
-              }
-            }
-          }
+        // Just disable the audio track — it stays in the peer connection
+        // so mic-granted can re-enable it without renegotiation.
+        const audioTrack = localStreamRef.current?.getAudioTracks()[0]
+        if (audioTrack) {
+          audioTrack.enabled = false
         }
         setIsAudioEnabled(false)
         setMicAllowedByHost(false)
@@ -1040,7 +992,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
     const hasVideo = p.role === 'HOST' && (remoteStream?.getVideoTracks().length ?? 0) > 0
     allTiles.push({
       userId: p.userId,
-      name: `${p.firstName} ${p.lastName}`,
+      name: p.firstName ? `${p.firstName} ${p.lastName || ''}`.trim() : (p.role === 'HOST' ? 'Преподаватель' : 'Студент'),
       stream: remoteStream,
       micEnabled: p.micEnabled,
       role: p.role,
