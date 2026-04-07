@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Mic, MicOff, Video as VideoIcon, VideoOff,
   PhoneOff, Radio, Users, Loader2, AlertCircle,
-  MessageCircle, X,
+  MessageCircle, X, ChevronDown,
   UserCheck, Square, Circle,
 } from 'lucide-react'
 import type { LiveSession } from '@/types'
@@ -260,38 +260,45 @@ function ParticipantsPanel({
         list.map((p) => (
           <div
             key={p.userId}
-            className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2"
+            className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
           >
             {/* Avatar */}
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-              <span className="text-white font-semibold text-xs select-none">
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <span className="text-white font-bold text-sm select-none">
                 {getInitials(`${p.firstName} ${p.lastName}`)}
               </span>
             </div>
 
-            {/* Name */}
+            {/* Name — large and prominent */}
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">
+              <p className="text-white text-base font-semibold truncate leading-tight">
                 {p.firstName} {p.lastName}
               </p>
-              <p className="text-gray-400 text-[10px]">
-                {p.role === 'HOST' ? 'Хост' : 'Студент'}
-              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-gray-400 text-xs">
+                  {p.role === 'HOST' ? 'Хост' : 'Студент'}
+                </span>
+                {p.handRaised && (
+                  <span className="text-yellow-400 text-xs font-medium animate-pulse">
+                    &#9995; Рука поднята
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Mic status + control button (students only) */}
             {p.role === 'STUDENT' && (
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {p.micEnabled ? (
-                  <Mic className="h-3.5 w-3.5 text-green-400" />
+                  <Mic className="h-4 w-4 text-green-400" />
                 ) : (
-                  <MicOff className="h-3.5 w-3.5 text-gray-500" />
+                  <MicOff className="h-4 w-4 text-gray-500" />
                 )}
                 <button
                   onClick={() =>
                     p.micEnabled ? onRevokeSpeak(p.userId) : onAllowSpeak(p.userId)
                   }
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
                     p.micEnabled
                       ? 'bg-red-600/30 hover:bg-red-600/50 text-red-300'
                       : 'bg-green-600/30 hover:bg-green-600/50 text-green-300'
@@ -343,9 +350,13 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   const [error, setError] = useState<string | null>(null)
   const [isStartingLive, setIsStartingLive] = useState(false)
 
-  // ── Sidebar ────────────────────────────────────────────────────────────────
+  // ── Sidebar (desktop) ───────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat')
+
+  // ── Mobile drawer ─────────────────────────────────────────────────────────
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
+  const [mobileDrawerTab, setMobileDrawerTab] = useState<SidebarTab>('chat')
 
   // ── Chat (state lives here so messages survive sidebar open/close) ────────
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -395,6 +406,21 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           targetUserId,
           signal: { type: 'candidate', candidate: event.candidate.toJSON() },
         })
+      }
+    }
+
+    // Auto-renegotiate when tracks change (e.g. mic grant/revoke toggling enabled)
+    pc.onnegotiationneeded = async () => {
+      try {
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        socketRef.current?.emit('webrtc-signal', {
+          sessionId: sessionIdRef.current,
+          targetUserId,
+          signal: { type: 'offer', sdp: offer.sdp },
+        })
+      } catch (e) {
+        console.error('[webrtc] onnegotiationneeded failed for', targetUserId, e)
       }
     }
 
@@ -611,10 +637,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       })
 
       // ── mic-granted: backend broadcasts when host calls grant-mic ────────
-      // Payload: { userId, sessionId }
-      // Audio track is already added to peer connections (with enabled=false).
-      // We simply flip track.enabled — no renegotiation needed.
-      socket.on('mic-granted', (data: { userId: string }) => {
+      // Enable the audio track and force renegotiation so remote peers
+      // start receiving audio data reliably.
+      socket.on('mic-granted', async (data: { userId: string }) => {
         if (aborted) return
 
         // Update participant list UI for everyone
@@ -631,12 +656,26 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (track) track.enabled = true
         setIsAudioEnabled(true)
         setMicAllowedByHost(true)
+
+        // Force renegotiation with all peers so they pick up the now-enabled audio
+        for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
+          try {
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            socket!.emit('webrtc-signal', {
+              sessionId: sessionIdRef.current,
+              targetUserId,
+              signal: { type: 'offer', sdp: offer.sdp },
+            })
+          } catch (e) {
+            console.error('[webrtc] mic-granted renegotiation failed for', targetUserId, e)
+          }
+        }
       })
 
       // ── mic-revoked: backend broadcasts when host calls revoke-mic ────────
-      // Payload: { userId, sessionId }
-      // Audio track stays in peer connections — we just disable it.
-      socket.on('mic-revoked', (data: { userId: string }) => {
+      // Disable the audio track and renegotiate so remote peers stop receiving audio.
+      socket.on('mic-revoked', async (data: { userId: string }) => {
         if (aborted) return
 
         // Update participant list UI for everyone
@@ -653,6 +692,21 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (track) track.enabled = false
         setIsAudioEnabled(false)
         setMicAllowedByHost(false)
+
+        // Force renegotiation with all peers
+        for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
+          try {
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            socket!.emit('webrtc-signal', {
+              sessionId: sessionIdRef.current,
+              targetUserId,
+              signal: { type: 'offer', sdp: offer.sdp },
+            })
+          } catch (e) {
+            console.error('[webrtc] mic-revoked renegotiation failed for', targetUserId, e)
+          }
+        }
       })
 
       // ── Live chat — append messages to parent state ─────────────────────
@@ -1016,10 +1070,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
               <Loader2 className="h-3 w-3 animate-spin" /> Переподключение...
             </span>
           )}
-          {/* Sidebar toggle */}
+          {/* Sidebar toggle — desktop only */}
           <button
             onClick={() => setSidebarOpen((v) => !v)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+            className="hidden sm:flex p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
             title={sidebarOpen ? 'Скрыть панель' : 'Показать панель'}
           >
             <MessageCircle className="h-5 w-5" />
@@ -1081,73 +1135,57 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           )}
         </div>
 
-        {/* ── Sidebar ────────────────────────────────────────────────────── */}
+        {/* ── Desktop sidebar (hidden on mobile) ─────────────────────────── */}
         {sidebarOpen && (
-          <>
-            {/* Mobile backdrop — tap to close */}
-            <div
-              className="fixed inset-0 bg-black/60 z-10 sm:hidden"
-              onClick={() => setSidebarOpen(false)}
-            />
-
-            {/* Panel: absolute overlay on mobile, inline on sm+ */}
-            <div className="absolute sm:relative inset-y-0 right-0 z-20 w-[85vw] sm:w-72 lg:w-80 bg-gray-900 border-l border-gray-800 flex flex-col shrink-0">
-              {/* Sidebar tabs */}
-              <div className="flex border-b border-gray-800 shrink-0">
+          <div className="hidden sm:flex relative w-72 lg:w-80 bg-gray-900 border-l border-gray-800 flex-col shrink-0">
+            {/* Sidebar tabs */}
+            <div className="flex border-b border-gray-800 shrink-0">
+              <button
+                onClick={() => setSidebarTab('chat')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                  sidebarTab === 'chat'
+                    ? 'text-white border-b-2 border-indigo-500'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Чат
+              </button>
+              {isHost && (
                 <button
-                  onClick={() => setSidebarTab('chat')}
+                  onClick={() => setSidebarTab('participants')}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
-                    sidebarTab === 'chat'
+                    sidebarTab === 'participants'
                       ? 'text-white border-b-2 border-indigo-500'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  Чат
+                  <Users className="h-3.5 w-3.5" />
+                  Участники
                 </button>
-                {isHost && (
-                  <button
-                    onClick={() => setSidebarTab('participants')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
-                      sidebarTab === 'participants'
-                        ? 'text-white border-b-2 border-indigo-500'
-                        : 'text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    <Users className="h-3.5 w-3.5" />
-                    Участники
-                  </button>
-                )}
-                {/* Close button for mobile */}
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="sm:hidden flex items-center justify-center px-3 text-gray-400 hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Sidebar content */}
-              <div className="flex-1 overflow-hidden">
-                {sidebarTab === 'chat' ? (
-                  <LiveChatPanel
-                    socket={socketRef.current}
-                    sessionId={sessionId}
-                    currentUserId={user?.id ?? ''}
-                    currentUserName={user ? `${user.firstName} ${user.lastName}` : ''}
-                    messages={chatMessages}
-                  />
-                ) : (
-                  <ParticipantsPanel
-                    participants={participants}
-                    currentUserId={user?.id ?? ''}
-                    onAllowSpeak={handleAllowSpeak}
-                    onRevokeSpeak={handleRevokeSpeak}
-                  />
-                )}
-              </div>
+              )}
             </div>
-          </>
+
+            {/* Sidebar content */}
+            <div className="flex-1 overflow-hidden">
+              {sidebarTab === 'chat' ? (
+                <LiveChatPanel
+                  socket={socketRef.current}
+                  sessionId={sessionId}
+                  currentUserId={user?.id ?? ''}
+                  currentUserName={user ? `${user.firstName} ${user.lastName}` : ''}
+                  messages={chatMessages}
+                />
+              ) : (
+                <ParticipantsPanel
+                  participants={participants}
+                  currentUserId={user?.id ?? ''}
+                  onAllowSpeak={handleAllowSpeak}
+                  onRevokeSpeak={handleRevokeSpeak}
+                />
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -1244,6 +1282,33 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           {/* Separator */}
           <div className="w-px h-8 bg-gray-700 mx-0.5 sm:mx-1" />
 
+          {/* Mobile: Chat button */}
+          <button
+            onClick={() => { setMobileDrawerTab('chat'); setMobileDrawerOpen(true) }}
+            className="sm:hidden flex flex-col items-center gap-1 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors min-w-[52px] min-h-[52px] justify-center px-2"
+            title="Чат"
+          >
+            <MessageCircle className="h-5 w-5" />
+            <span className="text-[10px] leading-none">Чат</span>
+          </button>
+
+          {/* Mobile: Participants button (host only) */}
+          {isHost && (
+            <button
+              onClick={() => { setMobileDrawerTab('participants'); setMobileDrawerOpen(true) }}
+              className="sm:hidden flex flex-col items-center gap-1 rounded-xl bg-gray-700 hover:bg-gray-600 text-white transition-colors min-w-[52px] min-h-[52px] justify-center px-2"
+              title="Участники"
+            >
+              <Users className="h-5 w-5" />
+              <span className="text-[10px] leading-none">
+                {Object.keys(participants).length}
+              </span>
+            </button>
+          )}
+
+          {/* Separator (mobile) */}
+          <div className="sm:hidden w-px h-8 bg-gray-700 mx-0.5" />
+
           {/* End / Leave */}
           {isHost ? (
             <button
@@ -1266,6 +1331,77 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           )}
         </div>
       </div>
+
+      {/* ── Mobile bottom drawer ─────────────────────────────────────────── */}
+      {mobileDrawerOpen && (
+        <div className="sm:hidden fixed inset-0 z-50 flex flex-col justify-end">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setMobileDrawerOpen(false)}
+          />
+
+          {/* Drawer panel — 70% height */}
+          <div className="relative bg-gray-900 rounded-t-2xl flex flex-col" style={{ height: '70vh' }}>
+            {/* Handle + header */}
+            <div className="flex flex-col items-center pt-2 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-gray-600 mb-2" />
+              <div className="flex w-full border-b border-gray-800">
+                <button
+                  onClick={() => setMobileDrawerTab('chat')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                    mobileDrawerTab === 'chat'
+                      ? 'text-white border-b-2 border-indigo-500'
+                      : 'text-gray-400'
+                  }`}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Чат
+                </button>
+                {isHost && (
+                  <button
+                    onClick={() => setMobileDrawerTab('participants')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+                      mobileDrawerTab === 'participants'
+                        ? 'text-white border-b-2 border-indigo-500'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Участники ({Object.keys(participants).length})
+                  </button>
+                )}
+                <button
+                  onClick={() => setMobileDrawerOpen(false)}
+                  className="flex items-center justify-center px-4 text-gray-400 hover:text-white"
+                >
+                  <ChevronDown className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Drawer content */}
+            <div className="flex-1 overflow-hidden">
+              {mobileDrawerTab === 'chat' ? (
+                <LiveChatPanel
+                  socket={socketRef.current}
+                  sessionId={sessionId}
+                  currentUserId={user?.id ?? ''}
+                  currentUserName={user ? `${user.firstName} ${user.lastName}` : ''}
+                  messages={chatMessages}
+                />
+              ) : (
+                <ParticipantsPanel
+                  participants={participants}
+                  currentUserId={user?.id ?? ''}
+                  onAllowSpeak={handleAllowSpeak}
+                  onRevokeSpeak={handleRevokeSpeak}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
