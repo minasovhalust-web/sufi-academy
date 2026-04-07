@@ -54,8 +54,9 @@ const sessionRoom = (sessionId: string) => `live:${sessionId}`;
  *   participant-joined { userId, firstName, lastName, role, micEnabled, handRaised }
  *   participant-left   { userId, sessionId }
  *   hand-raised        { userId, sessionId }
- *   mic-granted        { userId, sessionId }
- *   mic-revoked        { userId, sessionId }
+ *   mic-granted        { userId, sessionId }                  → target student only
+ *   mic-revoked        { userId, sessionId }                  → target student only
+ *   mic-state-changed  { userId, sessionId }                  → entire room (UI update)
  *   webrtc-signal      { fromUserId, sessionId, signal }     → target peer only
  *   live-chat-message   { userId, userName, message, timestamp }
  *   session-ended      { sessionId, endedAt }
@@ -218,7 +219,9 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * grant-mic — host allows a participant to unmute.
    * Automatically lowers the participant's raised hand.
-   * Broadcasts to all room members so clients can update their UI.
+   *
+   * Sends mic-granted directly to the student's socket so they can acquire
+   * media, and broadcasts mic-granted to the whole room for UI updates.
    */
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('grant-mic')
@@ -233,10 +236,17 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.data.user.id,
         client.data.user.role,
       );
-      this.server.to(sessionRoom(dto.sessionId)).emit('mic-granted', {
-        userId: dto.targetUserId,
-        sessionId: dto.sessionId,
-      });
+
+      const payload = { userId: dto.targetUserId, sessionId: dto.sessionId };
+
+      // Send directly to the student's socket so they acquire mic immediately
+      const studentSocketId = this.userSockets.get(dto.targetUserId);
+      if (studentSocketId) {
+        this.server.to(studentSocketId).emit('mic-granted', payload);
+      }
+
+      // Broadcast to the room so all clients update their UI (participant list)
+      this.server.to(sessionRoom(dto.sessionId)).emit('mic-state-changed', payload);
     } catch (error) {
       this.emitException(client, 'grant-mic', error.message);
     }
@@ -244,6 +254,9 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * revoke-mic — host mutes a participant.
+   *
+   * Sends mic-revoked directly to the student's socket so they stop media,
+   * and broadcasts to the whole room for UI updates.
    */
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('revoke-mic')
@@ -258,9 +271,19 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
         client.data.user.id,
         client.data.user.role,
       );
-      this.server.to(sessionRoom(dto.sessionId)).emit('mic-revoked', {
-        userId: dto.targetUserId,
-        sessionId: dto.sessionId,
+
+      const payload = { userId: dto.targetUserId, sessionId: dto.sessionId };
+
+      // Send directly to the student's socket so they stop mic immediately
+      const studentSocketId = this.userSockets.get(dto.targetUserId);
+      if (studentSocketId) {
+        this.server.to(studentSocketId).emit('mic-revoked', payload);
+      }
+
+      // Broadcast to the room so all clients update their UI
+      this.server.to(sessionRoom(dto.sessionId)).emit('mic-state-changed', {
+        ...payload,
+        micEnabled: false,
       });
     } catch (error) {
       this.emitException(client, 'revoke-mic', error.message);

@@ -390,13 +390,16 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-    // Always add ALL tracks (audio + video) for both host and student.
-    // Student audio starts with track.enabled = false — the host toggles it
-    // via grant-mic / revoke-mic which simply flips track.enabled.
-    // This avoids dynamic addTrack/removeTrack + renegotiation complexity.
+    // Host: add all tracks (video + audio).
+    // Student: add only video tracks. Audio is added lazily when mic-granted
+    // fires — the student calls getUserMedia({audio}) and adds the track then.
     const stream = localStreamRef.current
     if (stream) {
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      if (isHostRef.current) {
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      } else {
+        stream.getVideoTracks().forEach((track) => pc.addTrack(track, stream))
+      }
     }
 
     pc.onicecandidate = (event) => {
@@ -468,27 +471,19 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       // 2. Acquire local media
-      // We don't know isHost yet (session data hasn't loaded), so we initially
-      // try to get full media and then re-evaluate. But since getUserMedia is
-      // called before the WS connects, we grab audio-only for now and upgrade
-      // the host track after session-state arrives.
-      // Simpler approach: always request audio; host requests video in addition.
-      // We do this by attempting video+audio; if denied/unavailable use audio only.
+      // We try video+audio first (for host). If that fails, try video-only
+      // (students typically don't need audio at init — they get it lazily
+      // via mic-granted). If video also fails, create an empty stream so
+      // the rest of the flow still works.
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       } catch {
-        // Fall back to audio-only (e.g. no camera, or student device)
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
-        } catch (err: unknown) {
-          const msg =
-            err instanceof Error && err.name === 'NotAllowedError'
-              ? 'Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.'
-              : 'Не удалось получить доступ к микрофону.'
-          setError(msg)
-          setIsInitializing(false)
-          return
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        } catch {
+          // No camera available (common for students on phones) — create empty stream
+          stream = new MediaStream()
         }
       }
 
@@ -500,7 +495,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       localStreamRef.current = stream
       setLocalStream(stream)
 
-      // Mute audio track by default — host will grant permission
+      // Mute audio track by default — host will enable it in session-state handler
       const audioTrack = stream.getAudioTracks()[0]
       if (audioTrack) audioTrack.enabled = false
       setIsAudioEnabled(false)
@@ -636,77 +631,104 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       })
 
-      // ── mic-granted: backend broadcasts when host calls grant-mic ────────
-      // Enable the audio track and force renegotiation so remote peers
-      // start receiving audio data reliably.
+      // ── mic-granted (sent directly to this student's socket) ────────────
+      // Acquire microphone on demand, add audio track to all peers, renegotiate.
       socket.on('mic-granted', async (data: { userId: string }) => {
         if (aborted) return
-
-        // Update participant list UI for everyone
-        setParticipants((prev) =>
-          prev[data.userId]
-            ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: true, handRaised: false } }
-            : prev
-        )
-
-        // Only the targeted student actually enables their microphone
+        // This event is targeted — only the granted student receives it.
+        // Ignore if it's not for us (safety check).
         if (data.userId !== userIdRef.current) return
 
-        const track = localStreamRef.current?.getAudioTracks()[0]
-        if (track) track.enabled = true
-        setIsAudioEnabled(true)
-        setMicAllowedByHost(true)
+        toast.success('Вам разрешили говорить', { duration: 4000 })
 
-        // Force renegotiation with all peers so they pick up the now-enabled audio
-        for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
-          try {
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            socket!.emit('webrtc-signal', {
-              sessionId: sessionIdRef.current,
-              targetUserId,
-              signal: { type: 'offer', sdp: offer.sdp },
-            })
-          } catch (e) {
-            console.error('[webrtc] mic-granted renegotiation failed for', targetUserId, e)
+        try {
+          // Acquire audio on demand — this is the first time we ask for mic
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+          const audioTrack = audioStream.getAudioTracks()[0]
+          if (!audioTrack) return
+
+          // Merge the new audio track into the existing local stream
+          const existingStream = localStreamRef.current
+          if (existingStream) {
+            existingStream.addTrack(audioTrack)
+          } else {
+            localStreamRef.current = audioStream
+            setLocalStream(audioStream)
           }
+
+          setIsAudioEnabled(true)
+          setMicAllowedByHost(true)
+
+          // Add audio track to ALL existing peer connections + renegotiate
+          const stream = localStreamRef.current!
+          for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
+            try {
+              pc.addTrack(audioTrack, stream)
+              const offer = await pc.createOffer()
+              await pc.setLocalDescription(offer)
+              socket!.emit('webrtc-signal', {
+                sessionId: sessionIdRef.current,
+                targetUserId,
+                signal: { type: 'offer', sdp: offer.sdp },
+              })
+            } catch (e) {
+              console.error('[webrtc] mic-granted renegotiation failed for', targetUserId, e)
+            }
+          }
+        } catch (err) {
+          console.error('[mic-granted] getUserMedia failed:', err)
+          toast.error('Не удалось получить доступ к микрофону')
         }
       })
 
-      // ── mic-revoked: backend broadcasts when host calls revoke-mic ────────
-      // Disable the audio track and renegotiate so remote peers stop receiving audio.
+      // ── mic-revoked (sent directly to this student's socket) ────────────
+      // Stop audio tracks, remove from all peers, renegotiate.
       socket.on('mic-revoked', async (data: { userId: string }) => {
         if (aborted) return
-
-        // Update participant list UI for everyone
-        setParticipants((prev) =>
-          prev[data.userId]
-            ? { ...prev, [data.userId]: { ...prev[data.userId], micEnabled: false } }
-            : prev
-        )
-
-        // Only the targeted student actually mutes their microphone
         if (data.userId !== userIdRef.current) return
 
-        const track = localStreamRef.current?.getAudioTracks()[0]
-        if (track) track.enabled = false
-        setIsAudioEnabled(false)
-        setMicAllowedByHost(false)
+        toast.info('Ваш микрофон отключён', { duration: 4000 })
 
-        // Force renegotiation with all peers
-        for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
-          try {
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            socket!.emit('webrtc-signal', {
-              sessionId: sessionIdRef.current,
-              targetUserId,
-              signal: { type: 'offer', sdp: offer.sdp },
-            })
-          } catch (e) {
-            console.error('[webrtc] mic-revoked renegotiation failed for', targetUserId, e)
+        const stream = localStreamRef.current
+        if (stream) {
+          // Stop and remove all audio tracks
+          for (const track of stream.getAudioTracks()) {
+            track.stop()
+            stream.removeTrack(track)
+
+            // Remove the sender from every peer connection + renegotiate
+            for (const [targetUserId, pc] of Object.entries(peersRef.current)) {
+              const sender = pc.getSenders().find(s => s.track === track)
+              if (sender) {
+                try { pc.removeTrack(sender) } catch { /* already removed */ }
+              }
+              try {
+                const offer = await pc.createOffer()
+                await pc.setLocalDescription(offer)
+                socket!.emit('webrtc-signal', {
+                  sessionId: sessionIdRef.current,
+                  targetUserId,
+                  signal: { type: 'offer', sdp: offer.sdp },
+                })
+              } catch (e) {
+                console.error('[webrtc] mic-revoked renegotiation failed for', targetUserId, e)
+              }
+            }
           }
         }
+
+        setIsAudioEnabled(false)
+        setMicAllowedByHost(false)
+      })
+
+      // ── mic-state-changed: broadcast to room for UI updates ─────────────
+      socket.on('mic-state-changed', (data: { userId: string; micEnabled?: boolean }) => {
+        if (aborted) return
+        setParticipants((prev) => {
+          if (!prev[data.userId]) return prev
+          const micEnabled = data.micEnabled ?? !prev[data.userId].micEnabled
+          return { ...prev, [data.userId]: { ...prev[data.userId], micEnabled, handRaised: false } }
+        })
       })
 
       // ── Live chat — append messages to parent state ─────────────────────
