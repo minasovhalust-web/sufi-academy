@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { io, Socket } from 'socket.io-client'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/store/auth.store'
-import { liveApi, storageApi } from '@/lib/api'
+import { liveApi, storageApi, coursesApi, videosApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -45,7 +45,12 @@ interface SessionStatePayload {
   activeCount: number
 }
 
-// No live chat handler: LiveGateway has no @SubscribeMessage for chat
+interface ChatMessage {
+  userId: string
+  userName: string
+  message: string
+  timestamp: string
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -144,21 +149,95 @@ function AudioOnlyTile({
 }
 
 // ── LiveChatPanel ─────────────────────────────────────────────────────────────
-// NOTE: The backend LiveGateway has no @SubscribeMessage handler for chat.
-// Supported events: join-session, leave-session, raise-hand, grant-mic,
-// revoke-mic, webrtc-signal, end-session.
-// Chat is shown as "not available" until a backend handler is added.
 
-function LiveChatPanel() {
+function LiveChatPanel({
+  socket,
+  sessionId,
+  currentUserId,
+  currentUserName,
+}: {
+  socket: Socket | null
+  sessionId: string
+  currentUserId: string
+  currentUserName: string
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [draft, setDraft] = useState('')
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!socket) return
+    const handler = (msg: ChatMessage) => {
+      setMessages((prev) => [...prev, msg])
+    }
+    socket.on('live-chat-message', handler)
+    return () => { socket.off('live-chat-message', handler) }
+  }, [socket])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const send = () => {
+    const text = draft.trim()
+    if (!text || !socket?.connected) return
+    socket.emit('live-chat-message', {
+      sessionId,
+      message: text,
+      userName: currentUserName,
+    })
+    setDraft('')
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 px-4 text-center">
-      <MessageCircle className="h-10 w-10 text-gray-600 opacity-50" />
-      <p className="text-sm font-medium text-gray-400">Чат недоступен</p>
-      <p className="text-xs text-gray-600 leading-relaxed">
-        Бэкенд (<span className="font-mono text-gray-500">LiveGateway</span>) не содержит обработчика для чата.
-        Функция будет доступна после добавления{' '}
-        <span className="font-mono text-gray-500">@SubscribeMessage</span> на сервере.
-      </p>
+    <div className="flex flex-col h-full">
+      {/* Messages list */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
+            <MessageCircle className="h-8 w-8 opacity-40" />
+            <p className="text-xs">Напишите первое сообщение</p>
+          </div>
+        ) : (
+          messages.map((m, i) => {
+            const isOwn = m.userId === currentUserId
+            return (
+              <div key={i} className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+                <span className="text-[10px] text-gray-500 mb-0.5">{m.userName}</span>
+                <div
+                  className={`px-3 py-1.5 rounded-xl text-sm max-w-[85%] break-words ${
+                    isOwn
+                      ? 'bg-indigo-600 text-white rounded-br-sm'
+                      : 'bg-gray-800 text-gray-200 rounded-bl-sm'
+                  }`}
+                >
+                  {m.message}
+                </div>
+              </div>
+            )
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="border-t border-gray-800 p-2 flex gap-2 shrink-0">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          placeholder="Сообщение..."
+          className="flex-1 bg-gray-800 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500 placeholder-gray-500"
+        />
+        <button
+          onClick={send}
+          disabled={!draft.trim()}
+          className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+        >
+          Отправить
+        </button>
+      </div>
     </div>
   )
 }
@@ -620,10 +699,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         setMicAllowedByHost(false)
       })
 
-      // ── No live chat handler: LiveGateway has no @SubscribeMessage for chat
-      // (supported events: join-session, leave-session, raise-hand, grant-mic,
-      //  revoke-mic, webrtc-signal, end-session)
-
       // ── Session ended ────────────────────────────────────────────────────
       socket.on('session-ended', () => {
         if (!aborted) router.push('/dashboard')
@@ -734,34 +809,67 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         const chunks = [...recordedChunksRef.current]
         recordedChunksRef.current = []
         const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+        const dateStr = new Date().toLocaleDateString('ru-RU')
         const filename = `live-recording-${sessionId}.${ext}`
-        const title = `Запись эфира: ${session?.title ?? sessionId}`
+        const title = `Запись эфира ${dateStr}`
+        const courseId = session?.courseId
 
         try {
           const blob = new Blob(chunks, { type: mimeType })
           const file = new File([blob], filename, { type: mimeType })
 
-          // Upload to storage
+          // 1. Upload to storage
           const uploadRes = await storageApi.upload(file)
-          const uploadedUrl = (uploadRes.data?.data as { url?: string })?.url ?? ''
+          const uploadData = uploadRes.data?.data ?? uploadRes.data
+          const storageKey: string =
+            (uploadData as { url?: string })?.url ??
+            (uploadData as { key?: string })?.key ??
+            ''
 
-          toast.success('Запись сохранена', {
-            description: title,
-            action: {
-              label: 'Скачать',
-              onClick: () => {
-                const a = document.createElement('a')
-                a.href = uploadedUrl || URL.createObjectURL(blob)
-                a.download = filename
-                a.target = '_blank'
-                a.rel = 'noopener noreferrer'
-                document.body.appendChild(a)
-                a.click()
-                document.body.removeChild(a)
-              },
-            },
-            duration: 15000,
-          })
+          // 2. Create module + lesson + video if courseId is available
+          if (courseId && storageKey) {
+            try {
+              // Create a new module for the recording
+              const modRes = await coursesApi.createModule(courseId, {
+                title: `Запись эфира ${dateStr}`,
+              })
+              const mod = modRes.data?.data ?? modRes.data
+              const moduleId: string = (mod as { id: string }).id
+
+              // Create a lesson inside the module
+              const lessonRes = await coursesApi.createLesson(courseId, moduleId, {
+                title,
+              })
+              const lesson = lessonRes.data?.data ?? lessonRes.data
+              const lessonId: string = (lesson as { id: string }).id
+
+              // Attach the video to the lesson
+              await videosApi.create({
+                title,
+                lessonId,
+                storageKey,
+                mimeType,
+                duration: 0,
+              })
+
+              toast.success('Запись сохранена как новый урок', {
+                description: `${title} — добавлен в курс`,
+                duration: 10000,
+              })
+            } catch (lessonErr) {
+              console.error('[recording] Failed to create lesson:', lessonErr)
+              // Upload succeeded but lesson creation failed — still inform user
+              toast.success('Запись загружена', {
+                description: 'Не удалось автоматически создать урок. Файл сохранён в хранилище.',
+                duration: 10000,
+              })
+            }
+          } else {
+            toast.success('Запись загружена', {
+              description: title,
+              duration: 10000,
+            })
+          }
         } catch (uploadErr) {
           console.error('[recording] Upload failed, falling back to local download:', uploadErr)
           // Fallback: trigger browser download directly from memory
@@ -1045,7 +1153,12 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
               {/* Sidebar content */}
               <div className="flex-1 overflow-hidden">
                 {sidebarTab === 'chat' ? (
-                  <LiveChatPanel />
+                  <LiveChatPanel
+                    socket={socketRef.current}
+                    sessionId={sessionId}
+                    currentUserId={user?.id ?? ''}
+                    currentUserName={user ? `${user.firstName} ${user.lastName}` : ''}
+                  />
                 ) : (
                   <ParticipantsPanel
                     participants={participants}
