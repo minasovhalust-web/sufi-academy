@@ -15,6 +15,7 @@ JWT_SECRET=sufi_academy_access_secret_key_minimum_32_chars
 APP_PORT=4000
 NODE_ENV=production
 FRONTEND_URL=https://muzasufy.com
+RESEND_API_KEY=re_ArtpDfSp_LFZFKw1XsQkHaqAFAiAqUqik
 ENVEOF
 
 cd /var/www/sufi-academy/backend && npm run build
