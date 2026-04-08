@@ -590,10 +590,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       }
 
-      function onParticipantJoined(data: RawParticipant) {
+      async function onParticipantJoined(data: RawParticipant) {
         if (aborted) return
         const p = normalizeParticipant(data)
         setParticipants((prev) => ({ ...prev, [p.userId]: p }))
+        // Create peer connection — we are the initiator for newly joined participants
+        if (p.userId !== userIdRef.current) {
+          await createPeer(p.userId, true)
+        }
       }
 
       function onParticipantLeft(data: { userId: string }) {
