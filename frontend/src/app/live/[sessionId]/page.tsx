@@ -365,7 +365,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Media state ────────────────────────────────────────────────────────────
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true) // everyone starts with mic on
+  const [isAudioEnabled, setIsAudioEnabled] = useState(false) // mic off until user clicks
   const [isVideoEnabled, setIsVideoEnabled] = useState(true)
 
   // ── Session / UI state ─────────────────────────────────────────────────────
@@ -402,6 +402,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const sessionRef = useRef<LiveSession | null>(null)
+  /** Whether getUserMedia({audio}) has been called and audio track added to peers */
+  const audioAcquiredRef = useRef(false)
 
   useEffect(() => { userIdRef.current = user?.id }, [user?.id])
   useEffect(() => { sessionRef.current = session }, [session])
@@ -418,10 +420,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-    // Add ALL tracks (video + audio) for both host and student.
-    // Student's audio track is disabled but present — this ensures it's in the
-    // SDP from the start. On mic-granted we just flip track.enabled = true,
-    // no renegotiation needed.
+    // Add whatever tracks are currently in localStream (initially video only).
+    // When audio is acquired later via toggleAudio(), it's added via pc.addTrack()
+    // which triggers onnegotiationneeded for automatic renegotiation.
     const stream = localStreamRef.current
     if (stream) {
       stream.getTracks().forEach((track) => pc.addTrack(track, stream))
@@ -506,16 +507,15 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         // Fallback to public STUN
       }
 
-      // 2. Acquire local media
+      // 2. Acquire local media — VIDEO ONLY at start.
+      //    Audio is acquired lazily on first mic toggle via getUserMedia({audio}).
+      //    This avoids the WebRTC issue where a disabled audio track in the initial
+      //    SDP is never heard by remote peers.
       let stream: MediaStream
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
       } catch {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        } catch {
-          stream = new MediaStream()
-        }
+        stream = new MediaStream()
       }
 
       if (aborted) {
@@ -525,11 +525,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
       localStreamRef.current = stream
       setLocalStream(stream)
-
-      // Audio enabled by default for everyone — anyone can speak
-      const audioTrack = stream.getAudioTracks()[0]
-      if (audioTrack) audioTrack.enabled = true
-      setIsAudioEnabled(true)
+      setIsAudioEnabled(false)
 
       // 3. Connect WebSocket — single connection for entire session lifetime
       socket = io(`${WS_URL}/live`, {
@@ -661,11 +657,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (aborted) return
         if (data.userId !== userIdRef.current) return
 
-        toast.success('Микрофон включён', { duration: 4000 })
+        toast.success('Микрофон включён преподавателем', { duration: 4000 })
 
+        // If audio track exists, just re-enable it (no renegotiation needed)
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) audioTrack.enabled = true
-        setIsAudioEnabled(true)
+        if (audioTrack) {
+          audioTrack.enabled = true
+          setIsAudioEnabled(true)
+        }
       }
 
       function onMicRevoked(data: { userId: string }) {
@@ -674,24 +673,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
         toast.info('Преподаватель отключил ваш микрофон', { duration: 4000 })
 
+        // Just disable the track — sends silence, no renegotiation needed
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) {
-          audioTrack.enabled = false
-          // Renegotiate to stop sending audio
-          Object.entries(peersRef.current).forEach(async ([peerId, pc]) => {
-            try {
-              const offer = await pc.createOffer()
-              await pc.setLocalDescription(offer)
-              socketRef.current?.emit('webrtc-signal', {
-                sessionId: sessionIdRef.current,
-                targetUserId: peerId,
-                signal: { type: 'offer', sdp: offer.sdp },
-              })
-            } catch (e) {
-              console.error('[mic-revoked] renegotiation failed', e)
-            }
-          })
-        }
+        if (audioTrack) audioTrack.enabled = false
         setIsAudioEnabled(false)
       }
 
@@ -755,24 +739,39 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Controls ───────────────────────────────────────────────────────────────
 
   const toggleAudio = async () => {
-    const track = localStreamRef.current?.getAudioTracks()[0]
-    if (track) {
-      track.enabled = !track.enabled
-      setIsAudioEnabled(track.enabled)
-      // Renegotiate with all peers so they receive/stop receiving audio
-      for (const [peerId, pc] of Object.entries(peersRef.current)) {
-        try {
-          const offer = await pc.createOffer()
-          await pc.setLocalDescription(offer)
-          socketRef.current?.emit('webrtc-signal', {
-            sessionId,
-            targetUserId: peerId,
-            signal: { type: 'offer', sdp: offer.sdp },
-          })
-        } catch (e) {
-          console.error('[toggleAudio] renegotiation failed for', peerId, e)
+    const stream = localStreamRef.current
+    if (!stream) return
+
+    const existingTrack = stream.getAudioTracks()[0]
+
+    if (!existingTrack && !audioAcquiredRef.current) {
+      // First time — acquire audio, add track to stream + all peer connections.
+      // Adding a track to an active peer connection fires onnegotiationneeded,
+      // which automatically creates a new offer and sends it via webrtc-signal.
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const audioTrack = audioStream.getAudioTracks()[0]
+        if (!audioTrack) return
+
+        stream.addTrack(audioTrack)
+        audioAcquiredRef.current = true
+        setLocalStream(new MediaStream(stream.getTracks())) // force React re-render
+        setIsAudioEnabled(true)
+
+        // Add audio track to every existing peer connection → triggers onnegotiationneeded
+        for (const pc of Object.values(peersRef.current)) {
+          pc.addTrack(audioTrack, stream)
         }
+      } catch (err) {
+        console.error('[toggleAudio] getUserMedia({audio}) failed:', err)
+        toast.error('Не удалось получить доступ к микрофону')
       }
+    } else if (existingTrack) {
+      // Audio track already exists — just toggle enabled.
+      // enabled=false sends silence; enabled=true resumes audio.
+      // No renegotiation needed — the track is already in the SDP.
+      existingTrack.enabled = !existingTrack.enabled
+      setIsAudioEnabled(existingTrack.enabled)
     }
   }
 
@@ -861,12 +860,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         recordingStream.addTrack(vt)
       }
 
-      // Add local audio — temporarily enable so MediaRecorder captures it
+      // Add local audio if available — temporarily enable so MediaRecorder captures it
       for (const at of localStreamRef.current.getAudioTracks()) {
         at.enabled = true
         recordingStream.addTrack(at)
       }
-      setIsAudioEnabled(true)
+      if (localStreamRef.current.getAudioTracks().length > 0) {
+        setIsAudioEnabled(true)
+      }
 
       const recorder = new MediaRecorder(recordingStream, { mimeType })
       recordedChunksRef.current = []
