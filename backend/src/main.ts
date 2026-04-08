@@ -53,9 +53,9 @@ async function bootstrap() {
   // Serializer interceptor — processes @Exclude/@Expose on response DTOs
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  // CORS — restrict to frontend origin in production
+  // CORS — allow frontend origins
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    origin: '*',
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

@@ -246,7 +246,10 @@ export class LiveGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       // Broadcast to the room so all clients update their UI (participant list)
-      this.server.to(sessionRoom(dto.sessionId)).emit('mic-state-changed', payload);
+      this.server.to(sessionRoom(dto.sessionId)).emit('mic-state-changed', {
+        ...payload,
+        micEnabled: true,
+      });
     } catch (error) {
       this.emitException(client, 'grant-mic', error.message);
     }

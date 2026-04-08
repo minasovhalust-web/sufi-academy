@@ -725,16 +725,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       })
 
-      socket.on('mic-state-changed', (data: { userId: string; micEnabled: boolean }) => {
+      socket.on('mic-state-changed', (data: { userId: string; micEnabled?: boolean }) => {
         setParticipants((prev) => {
           const p = prev[data.userId]
           if (!p) return prev
+          const micEnabled = data.micEnabled !== undefined ? data.micEnabled : true
           return {
             ...prev,
             [data.userId]: {
               ...p,
-              micEnabled: data.micEnabled,
-              handRaised: data.micEnabled ? false : p.handRaised,
+              micEnabled,
+              handRaised: micEnabled ? false : p.handRaised,
             },
           }
         })
