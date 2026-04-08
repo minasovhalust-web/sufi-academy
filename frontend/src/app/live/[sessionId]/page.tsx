@@ -142,16 +142,31 @@ function VideoTile({
 // ── AudioOnlyTile — student without camera ────────────────────────────────────
 
 function AudioOnlyTile({
+  stream,
   name,
   isMuted = true,
   isLocal = false,
 }: {
+  stream?: MediaStream | null
   name: string
   isMuted?: boolean
   isLocal?: boolean
 }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  // Attach the remote audio stream so the browser actually plays it
+  useEffect(() => {
+    if (audioRef.current && stream) {
+      audioRef.current.srcObject = stream
+    }
+  }, [stream])
+
   return (
     <div className="relative bg-gray-800 rounded-xl overflow-hidden flex flex-col items-center justify-center w-full h-full gap-2 py-3 min-h-[80px]">
+      {/* Hidden audio element — plays the remote participant's audio */}
+      {stream && !isLocal && (
+        <audio ref={audioRef} autoPlay playsInline />
+      )}
       <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shrink-0">
         <span className="text-white font-bold text-base sm:text-xl select-none">{getInitials(name)}</span>
       </div>
@@ -1035,6 +1050,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                     />
                   ) : (
                     <AudioOnlyTile
+                      stream={tile.stream}
                       name={tile.name}
                       isMuted={!tile.micEnabled}
                       isLocal={tile.isLocal}
