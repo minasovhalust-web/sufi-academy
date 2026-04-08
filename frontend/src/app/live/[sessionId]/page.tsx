@@ -106,27 +106,22 @@ function VideoTile({
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
-    const el = videoRef.current
-    if (!el) return
-    if (stream) {
-      el.srcObject = stream
-      el.play().catch(() => { /* autoplay may be blocked */ })
-    } else {
-      el.srcObject = null
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream
     }
   }, [stream])
 
   return (
     <div className="relative bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center w-full h-full">
-      {/* Always-mounted video element — hidden when no stream */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted={isLocal}
-        className={`w-full h-full object-cover ${stream ? '' : 'hidden'}`}
-      />
-      {!stream && (
+      {stream ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isLocal}
+          className="w-full h-full object-cover"
+        />
+      ) : (
         <div className="flex flex-col items-center gap-2 text-gray-500">
           <VideoOff className="h-8 w-8" />
           <span className="text-xs">Нет видео</span>
@@ -147,36 +142,16 @@ function VideoTile({
 // ── AudioOnlyTile — student without camera ────────────────────────────────────
 
 function AudioOnlyTile({
-  stream,
   name,
   isMuted = true,
   isLocal = false,
 }: {
-  stream?: MediaStream | null
   name: string
   isMuted?: boolean
   isLocal?: boolean
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null)
-
-  // Attach/detach the remote audio stream.
-  // The <audio> element is always in the DOM so the ref is never null.
-  useEffect(() => {
-    const el = audioRef.current
-    if (!el) return
-    if (stream && !isLocal) {
-      el.srcObject = stream
-      // Some browsers need an explicit play() after setting srcObject
-      el.play().catch(() => { /* autoplay blocked — user interaction needed */ })
-    } else {
-      el.srcObject = null
-    }
-  }, [stream, isLocal])
-
   return (
     <div className="relative bg-gray-800 rounded-xl overflow-hidden flex flex-col items-center justify-center w-full h-full gap-2 py-3 min-h-[80px]">
-      {/* Always-mounted audio element for remote participant playback */}
-      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
       <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shrink-0">
         <span className="text-white font-bold text-base sm:text-xl select-none">{getInitials(name)}</span>
       </div>
@@ -287,102 +262,60 @@ function LiveChatPanel({
 function ParticipantsPanel({
   participants,
   currentUserId,
-  isHost,
-  socket,
-  sessionId,
 }: {
   participants: Record<string, Participant>
   currentUserId: string
-  isHost: boolean
-  socket: Socket | null
-  sessionId: string
 }) {
   const list = Object.values(participants).filter((p) => p.userId !== currentUserId)
-  const students = list.filter((p) => p.role === 'STUDENT')
-
-  const muteUser = (userId: string) => {
-    socket?.emit('revoke-mic', { sessionId, targetUserId: userId })
-  }
-
-  const muteAll = () => {
-    for (const s of students) {
-      socket?.emit('revoke-mic', { sessionId, targetUserId: s.userId })
-    }
-  }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Mute-all button — host only */}
-      {isHost && students.length > 0 && (
-        <div className="px-3 pt-3 pb-1 shrink-0">
-          <button
-            onClick={muteAll}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-medium transition-colors"
-          >
-            <MicOff className="h-3.5 w-3.5" />
-            Заглушить всех студентов
-          </button>
+    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {list.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
+          <Users className="h-8 w-8 opacity-40" />
+          <p className="text-xs">Нет участников</p>
         </div>
-      )}
+      ) : (
+        list.map((p) => (
+          <div
+            key={p.userId}
+            className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
+          >
+            {/* Avatar */}
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+              <span className="text-white font-bold text-sm select-none">
+                {getInitials(`${p.firstName} ${p.lastName}`)}
+              </span>
+            </div>
 
-      {/* Participants list */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {list.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
-            <Users className="h-8 w-8 opacity-40" />
-            <p className="text-xs">Нет участников</p>
-          </div>
-        ) : (
-          list.map((p) => (
-            <div
-              key={p.userId}
-              className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
-            >
-              {/* Avatar */}
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-                <span className="text-white font-bold text-sm select-none">
-                  {getInitials(`${p.firstName} ${p.lastName}`)}
+            {/* Name */}
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-base font-semibold truncate leading-tight">
+                {p.firstName} {p.lastName}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-gray-400 text-xs">
+                  {p.role === 'HOST' ? 'Хост' : 'Студент'}
                 </span>
-              </div>
-
-              {/* Name */}
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-base font-semibold truncate leading-tight">
-                  {p.firstName} {p.lastName}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-gray-400 text-xs">
-                    {p.role === 'HOST' ? 'Хост' : 'Студент'}
+                {p.handRaised && (
+                  <span className="text-yellow-400 text-xs font-medium animate-pulse">
+                    &#9995; Рука поднята
                   </span>
-                  {p.handRaised && (
-                    <span className="text-yellow-400 text-xs font-medium animate-pulse">
-                      &#9995; Рука поднята
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Mic status + mute button */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                {p.micEnabled ? (
-                  <Mic className="h-4 w-4 text-green-400" />
-                ) : (
-                  <MicOff className="h-4 w-4 text-gray-500" />
-                )}
-                {isHost && p.role === 'STUDENT' && p.micEnabled && (
-                  <button
-                    onClick={() => muteUser(p.userId)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors bg-red-600/30 hover:bg-red-600/50 text-red-300"
-                  >
-                    <MicOff className="h-3.5 w-3.5" />
-                    <span>Заглушить</span>
-                  </button>
                 )}
               </div>
             </div>
-          ))
-        )}
-      </div>
+
+            {/* Mic status */}
+            <div className="shrink-0">
+              {p.micEnabled ? (
+                <Mic className="h-4 w-4 text-green-400" />
+              ) : (
+                <MicOff className="h-4 w-4 text-gray-500" />
+              )}
+            </div>
+          </div>
+        ))
+      )}
     </div>
   )
 }
@@ -445,17 +378,18 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   useEffect(() => { isHostRef.current = isHost }, [isHost])
 
   // ── Create peer connection for a remote user ───────────────────────────────
-  // Uses "Perfect Negotiation" pattern to avoid offer collisions.
-  // polite peer = the one with the smaller userId — they yield on collision.
+  // isInitiator=true  → we create the offer (we initiated the connection)
+  // isInitiator=false → we wait for an offer (remote side initiated)
   const createPeer = useCallback(
-    (targetUserId: string): RTCPeerConnection => {
+    async (targetUserId: string, isInitiator: boolean): Promise<RTCPeerConnection> => {
       if (peersRef.current[targetUserId]) {
         peersRef.current[targetUserId].close()
       }
 
       const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-      // Add ALL tracks from localStream (video + audio) BEFORE any SDP exchange.
+      // Add ALL tracks from localStream (video + audio) BEFORE creating offer.
+      // Both tracks are present from the start so they're in the initial SDP.
       const stream = localStreamRef.current
       if (stream) {
         stream.getTracks().forEach((track) => pc.addTrack(track, stream))
@@ -489,29 +423,25 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       peersRef.current[targetUserId] = pc
+
+      // If we're the initiator, create and send the offer right away
+      if (isInitiator) {
+        try {
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+          socketRef.current?.emit('webrtc-signal', {
+            sessionId: sessionIdRef.current,
+            targetUserId,
+            signal: { type: 'offer', sdp: offer.sdp },
+          })
+        } catch (e) {
+          console.error('[webrtc] createOffer failed for', targetUserId, e)
+        }
+      }
+
       return pc
     },
     [],
-  )
-
-  /** Send an offer to a target peer (creates peer if needed) */
-  const sendOffer = useCallback(
-    async (targetUserId: string) => {
-      let pc = peersRef.current[targetUserId]
-      if (!pc) pc = createPeer(targetUserId)
-      try {
-        const offer = await pc.createOffer()
-        await pc.setLocalDescription(offer)
-        socketRef.current?.emit('webrtc-signal', {
-          sessionId: sessionIdRef.current,
-          targetUserId,
-          signal: { type: 'offer', sdp: offer.sdp },
-        })
-      } catch (e) {
-        console.error('[webrtc] sendOffer failed for', targetUserId, e)
-      }
-    },
-    [createPeer],
   )
 
   // ── Stable ref for router (avoids stale closures) ──────────────────────────
@@ -550,21 +480,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       // 2. Acquire local media — BOTH video + audio from the start.
       //    Both tracks are added to every peer connection in createPeer(),
       //    so audio is always in the SDP. Mic toggle = track.enabled flip.
-      //    Fallback chain ensures audio works even if camera is denied.
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       } catch {
-        // Camera+audio failed — try audio only (most important for students)
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         } catch {
-          // Audio failed — try video only
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-          } catch {
-            stream = new MediaStream()
-          }
+          stream = new MediaStream()
         }
       }
 
@@ -628,27 +551,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           isHostRef.current = true
         }
 
-        // Create peer connections to existing participants.
-        // Only the peer with the smaller userId sends the offer (avoids collision).
+        // Create peer connections to all existing participants (we are initiator)
         for (const p of state.participants) {
           if (p.userId === userIdRef.current) continue
-          createPeer(p.userId)
-          if ((userIdRef.current ?? '') < p.userId) {
-            await sendOffer(p.userId)
-          }
+          await createPeer(p.userId, true)
         }
       }
 
-      async function onParticipantJoined(data: RawParticipant) {
+      function onParticipantJoined(data: RawParticipant) {
         if (aborted) return
         const p = normalizeParticipant(data)
         setParticipants((prev) => ({ ...prev, [p.userId]: p }))
-        if (p.userId === userIdRef.current) return
-        // Create peer; only the side with smaller userId sends the offer
-        createPeer(p.userId)
-        if ((userIdRef.current ?? '') < p.userId) {
-          await sendOffer(p.userId)
-        }
       }
 
       function onParticipantLeft(data: { userId: string }) {
@@ -672,31 +585,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       async function onWebRtcSignal(data: IncomingSignal) {
         if (aborted) return
         const { fromUserId, signal } = data
-
-        // Perfect Negotiation: the "polite" peer (smaller userId) yields on collision
-        const isPolite = (userIdRef.current ?? '') < fromUserId
-
         try {
           if (signal.type === 'offer') {
-            let pc = peersRef.current[fromUserId]
-            if (!pc) pc = createPeer(fromUserId)
-
-            // Collision: we sent an offer too and haven't got an answer yet
-            const isCollision =
-              pc.signalingState === 'have-local-offer' ||
-              pc.signalingState === 'have-remote-offer'
-
-            if (isCollision && !isPolite) {
-              // We're impolite — ignore incoming offer, our offer wins
-              return
-            }
-
-            // We're polite or no collision — accept the incoming offer
-            if (isCollision) {
-              // Rollback our pending offer first
-              await pc.setLocalDescription({ type: 'rollback' })
-            }
-
+            // Incoming offer — create peer as non-initiator, then answer
+            const pc = await createPeer(fromUserId, false)
             await pc.setRemoteDescription(
               new RTCSessionDescription({ type: 'offer', sdp: signal.sdp! }),
             )
@@ -725,15 +617,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       }
 
-      function onMicRevoked(data: { userId: string }) {
-        if (aborted) return
-        if (data.userId !== userIdRef.current) return
-        toast.info('Преподаватель отключил ваш микрофон', { duration: 4000 })
-        const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) audioTrack.enabled = false
-        setIsAudioEnabled(false)
-      }
-
       function onChatMessage(msg: ChatMessage) {
         if (!aborted) setChatMessages((prev) => [...prev, msg])
       }
@@ -757,7 +640,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       socket.on('participant-joined', onParticipantJoined)
       socket.on('participant-left', onParticipantLeft)
       socket.on('webrtc-signal', onWebRtcSignal)
-      socket.on('mic-revoked', onMicRevoked)
       socket.on('live-chat-message', onChatMessage)
       socket.on('session-ended', onSessionEnded)
     }
@@ -1153,7 +1035,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                     />
                   ) : (
                     <AudioOnlyTile
-                      stream={tile.stream}
                       name={tile.name}
                       isMuted={!tile.micEnabled}
                       isLocal={tile.isLocal}
@@ -1208,9 +1089,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
-                  isHost={isHost}
-                  socket={socketRef.current}
-                  sessionId={sessionId}
                 />
               )}
             </div>
@@ -1410,9 +1288,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
-                  isHost={isHost}
-                  socket={socketRef.current}
-                  sessionId={sessionId}
                 />
               )}
             </div>
