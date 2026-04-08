@@ -664,7 +664,22 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         toast.success('Микрофон включён преподавателем', { duration: 4000 })
 
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) audioTrack.enabled = true
+        if (audioTrack) {
+          audioTrack.enabled = true
+          Object.entries(peersRef.current).forEach(async ([peerId, pc]) => {
+            try {
+              const offer = await pc.createOffer()
+              await pc.setLocalDescription(offer)
+              socketRef.current?.emit('webrtc-signal', {
+                sessionId: sessionIdRef.current,
+                targetUserId: peerId,
+                signal: { type: 'offer', sdp: offer.sdp },
+              })
+            } catch (e) {
+              console.error('[mic-granted] renegotiation failed', e)
+            }
+          })
+        }
         setIsAudioEnabled(true)
       }
 
@@ -675,7 +690,23 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         toast.info('Преподаватель отключил ваш микрофон', { duration: 4000 })
 
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
-        if (audioTrack) audioTrack.enabled = false
+        if (audioTrack) {
+          audioTrack.enabled = false
+          // Renegotiate to stop sending audio
+          Object.entries(peersRef.current).forEach(async ([peerId, pc]) => {
+            try {
+              const offer = await pc.createOffer()
+              await pc.setLocalDescription(offer)
+              socketRef.current?.emit('webrtc-signal', {
+                sessionId: sessionIdRef.current,
+                targetUserId: peerId,
+                signal: { type: 'offer', sdp: offer.sdp },
+              })
+            } catch (e) {
+              console.error('[mic-revoked] renegotiation failed', e)
+            }
+          })
+        }
         setIsAudioEnabled(false)
       }
 
