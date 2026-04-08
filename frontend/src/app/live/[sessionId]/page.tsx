@@ -754,11 +754,25 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
   // ── Controls ───────────────────────────────────────────────────────────────
 
-  const toggleAudio = () => {
+  const toggleAudio = async () => {
     const track = localStreamRef.current?.getAudioTracks()[0]
     if (track) {
       track.enabled = !track.enabled
       setIsAudioEnabled(track.enabled)
+      // Renegotiate with all peers so they receive/stop receiving audio
+      for (const [peerId, pc] of Object.entries(peersRef.current)) {
+        try {
+          const offer = await pc.createOffer()
+          await pc.setLocalDescription(offer)
+          socketRef.current?.emit('webrtc-signal', {
+            sessionId,
+            targetUserId: peerId,
+            signal: { type: 'offer', sdp: offer.sdp },
+          })
+        } catch (e) {
+          console.error('[toggleAudio] renegotiation failed for', peerId, e)
+        }
+      }
     }
   }
 
