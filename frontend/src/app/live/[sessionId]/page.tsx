@@ -279,6 +279,10 @@ function ParticipantsPanel({
     socket?.emit('revoke-mic', { sessionId, targetUserId })
   }
 
+  const grantMicUser = (targetUserId: string) => {
+    socket?.emit('grant-mic', { sessionId, targetUserId })
+  }
+
   const muteAll = () => {
     students.forEach((p) => {
       socket?.emit('revoke-mic', { sessionId, targetUserId: p.userId })
@@ -306,7 +310,11 @@ function ParticipantsPanel({
         list.map((p) => (
           <div
             key={p.userId}
-            className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
+            className={`flex items-center gap-3 rounded-lg px-3 py-3 ${
+              p.handRaised
+                ? 'bg-yellow-500/10 border border-yellow-500/30'
+                : 'bg-gray-800'
+            }`}
           >
             {/* Avatar */}
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
@@ -326,21 +334,35 @@ function ParticipantsPanel({
                 </span>
                 {p.handRaised && (
                   <span className="text-yellow-400 text-xs font-medium animate-pulse">
-                    &#9995; Рука поднята
+                    ✋ Просит слово
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Mute button (host only, students only) */}
+            {/* Mic control buttons (host only, students only) */}
             {isHost && p.role !== 'HOST' && (
-              <button
-                onClick={() => muteUser(p.userId)}
-                className="shrink-0 p-1.5 rounded-md hover:bg-red-600/20 text-gray-400 hover:text-red-400 transition-colors"
-                title="Заглушить"
-              >
-                <MicOff className="h-4 w-4" />
-              </button>
+              p.micEnabled ? (
+                <button
+                  onClick={() => muteUser(p.userId)}
+                  className="shrink-0 p-1.5 rounded-md bg-red-600/20 hover:bg-red-600/30 text-red-400 transition-colors"
+                  title="Заглушить"
+                >
+                  <MicOff className="h-4 w-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => grantMicUser(p.userId)}
+                  className={`shrink-0 p-1.5 rounded-md transition-colors ${
+                    p.handRaised
+                      ? 'bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400'
+                      : 'bg-green-600/20 hover:bg-green-600/30 text-green-400'
+                  }`}
+                  title="Разрешить говорить"
+                >
+                  <Mic className="h-4 w-4" />
+                </button>
+              )
             )}
 
             {/* Mic status */}
@@ -680,13 +702,56 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       socket.on('webrtc-signal', onWebRtcSignal)
       socket.on('live-chat-message', onChatMessage)
       socket.on('session-ended', onSessionEnded)
-      socket.on('mic-revoked', () => {
-        const track = localStreamRef.current?.getAudioTracks()[0]
-        if (track) {
-          track.enabled = false
-          setIsAudioEnabled(false)
+
+      socket.on('mic-revoked', (data: { userId: string }) => {
+        if (data.userId === userIdRef.current) {
+          const track = localStreamRef.current?.getAudioTracks()[0]
+          if (track) {
+            track.enabled = false
+            setIsAudioEnabled(false)
+          }
+          toast.info('Преподаватель отключил ваш микрофон')
         }
-        toast.info('Преподаватель отключил ваш микрофон')
+      })
+
+      socket.on('mic-granted', (data: { userId: string }) => {
+        if (data.userId === userIdRef.current) {
+          const track = localStreamRef.current?.getAudioTracks()[0]
+          if (track) {
+            track.enabled = true
+            setIsAudioEnabled(true)
+          }
+          toast.success('Преподаватель разрешил вам говорить')
+        }
+      })
+
+      socket.on('mic-state-changed', (data: { userId: string; micEnabled: boolean }) => {
+        setParticipants((prev) => {
+          const p = prev[data.userId]
+          if (!p) return prev
+          return {
+            ...prev,
+            [data.userId]: {
+              ...p,
+              micEnabled: data.micEnabled,
+              handRaised: data.micEnabled ? false : p.handRaised,
+            },
+          }
+        })
+      })
+
+      socket.on('hand-raised', (data: { userId: string }) => {
+        setParticipants((prev) => {
+          const p = prev[data.userId]
+          if (!p) return prev
+          return {
+            ...prev,
+            [data.userId]: { ...p, handRaised: true },
+          }
+        })
+        if (isHostRef.current) {
+          toast.info('Студент просит слово ✋')
+        }
       })
     }
 
@@ -1015,6 +1080,18 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
               Запланировано
             </Badge>
           )}
+          {(() => {
+            const handsRaisedCount = Object.values(participants).filter((p) => p.handRaised).length
+            return isHost && handsRaisedCount > 0 ? (
+              <button
+                onClick={() => { setSidebarOpen(true); setSidebarTab('participants') }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-xs font-medium animate-pulse shrink-0"
+                title="Поднятые руки"
+              >
+                ✋ {handsRaisedCount}
+              </button>
+            ) : null
+          })()}
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
@@ -1162,6 +1239,18 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             {isAudioEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
             <span className="text-[10px] leading-none">Микрофон</span>
           </button>
+
+          {/* Raise hand — student only */}
+          {!isHost && (
+            <button
+              onClick={() => socketRef.current?.emit('raise-hand', { sessionId })}
+              title="Поднять руку"
+              className="flex flex-col items-center gap-1 rounded-xl bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30 transition-colors min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
+            >
+              <span className="text-lg leading-none">✋</span>
+              <span className="text-[10px] leading-none">Рука</span>
+            </button>
+          )}
 
           {/* Camera — host only */}
           {isHost && (
