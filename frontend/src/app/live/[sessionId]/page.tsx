@@ -616,6 +616,18 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           if (p.userId === userIdRef.current) continue
           await createPeer(p.userId, true)
         }
+
+        // Sync local audio track with server-side micEnabled state
+        const selfParticipant = (state.participants as unknown as RawParticipant[]).find(
+          (p) => (p.userId ?? p.user?.id) === userIdRef.current
+        )
+        if (selfParticipant) {
+          const track = localStreamRef.current?.getAudioTracks()[0]
+          if (track) {
+            track.enabled = selfParticipant.micEnabled ?? false
+            setIsAudioEnabled(selfParticipant.micEnabled ?? false)
+          }
+        }
       }
 
       function onParticipantJoined(data: RawParticipant) {
