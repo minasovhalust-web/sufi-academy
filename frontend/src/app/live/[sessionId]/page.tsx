@@ -403,18 +403,17 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   useEffect(() => { isHostRef.current = isHost }, [isHost])
 
   // ── Create peer connection for a remote user ───────────────────────────────
-  // isInitiator=true  → we create the offer (we initiated the connection)
-  // isInitiator=false → we wait for an offer (remote side initiated)
+  // Uses "Perfect Negotiation" pattern to avoid offer collisions.
+  // polite peer = the one with the smaller userId — they yield on collision.
   const createPeer = useCallback(
-    async (targetUserId: string, isInitiator: boolean): Promise<RTCPeerConnection> => {
+    (targetUserId: string): RTCPeerConnection => {
       if (peersRef.current[targetUserId]) {
         peersRef.current[targetUserId].close()
       }
 
       const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
 
-      // Add ALL tracks from localStream (video + audio) BEFORE creating offer.
-      // Both tracks are present from the start so they're in the initial SDP.
+      // Add ALL tracks from localStream (video + audio) BEFORE any SDP exchange.
       const stream = localStreamRef.current
       if (stream) {
         stream.getTracks().forEach((track) => pc.addTrack(track, stream))
@@ -448,25 +447,29 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       peersRef.current[targetUserId] = pc
-
-      // If we're the initiator, create and send the offer right away
-      if (isInitiator) {
-        try {
-          const offer = await pc.createOffer()
-          await pc.setLocalDescription(offer)
-          socketRef.current?.emit('webrtc-signal', {
-            sessionId: sessionIdRef.current,
-            targetUserId,
-            signal: { type: 'offer', sdp: offer.sdp },
-          })
-        } catch (e) {
-          console.error('[webrtc] createOffer failed for', targetUserId, e)
-        }
-      }
-
       return pc
     },
     [],
+  )
+
+  /** Send an offer to a target peer (creates peer if needed) */
+  const sendOffer = useCallback(
+    async (targetUserId: string) => {
+      let pc = peersRef.current[targetUserId]
+      if (!pc) pc = createPeer(targetUserId)
+      try {
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+        socketRef.current?.emit('webrtc-signal', {
+          sessionId: sessionIdRef.current,
+          targetUserId,
+          signal: { type: 'offer', sdp: offer.sdp },
+        })
+      } catch (e) {
+        console.error('[webrtc] sendOffer failed for', targetUserId, e)
+      }
+    },
+    [createPeer],
   )
 
   // ── Stable ref for router (avoids stale closures) ──────────────────────────
@@ -583,10 +586,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           isHostRef.current = true
         }
 
-        // Create peer connections to all existing participants (we are initiator)
+        // Create peer connections to existing participants.
+        // Only the peer with the smaller userId sends the offer (avoids collision).
         for (const p of state.participants) {
           if (p.userId === userIdRef.current) continue
-          await createPeer(p.userId, true)
+          createPeer(p.userId)
+          if ((userIdRef.current ?? '') < p.userId) {
+            await sendOffer(p.userId)
+          }
         }
       }
 
@@ -594,9 +601,11 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (aborted) return
         const p = normalizeParticipant(data)
         setParticipants((prev) => ({ ...prev, [p.userId]: p }))
-        // Create peer connection — we are the initiator for newly joined participants
-        if (p.userId !== userIdRef.current) {
-          await createPeer(p.userId, true)
+        if (p.userId === userIdRef.current) return
+        // Create peer; only the side with smaller userId sends the offer
+        createPeer(p.userId)
+        if ((userIdRef.current ?? '') < p.userId) {
+          await sendOffer(p.userId)
         }
       }
 
@@ -621,10 +630,31 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       async function onWebRtcSignal(data: IncomingSignal) {
         if (aborted) return
         const { fromUserId, signal } = data
+
+        // Perfect Negotiation: the "polite" peer (smaller userId) yields on collision
+        const isPolite = (userIdRef.current ?? '') < fromUserId
+
         try {
           if (signal.type === 'offer') {
-            // Incoming offer — create peer as non-initiator, then answer
-            const pc = await createPeer(fromUserId, false)
+            let pc = peersRef.current[fromUserId]
+            if (!pc) pc = createPeer(fromUserId)
+
+            // Collision: we sent an offer too and haven't got an answer yet
+            const isCollision =
+              pc.signalingState === 'have-local-offer' ||
+              pc.signalingState === 'have-remote-offer'
+
+            if (isCollision && !isPolite) {
+              // We're impolite — ignore incoming offer, our offer wins
+              return
+            }
+
+            // We're polite or no collision — accept the incoming offer
+            if (isCollision) {
+              // Rollback our pending offer first
+              await pc.setLocalDescription({ type: 'rollback' })
+            }
+
             await pc.setRemoteDescription(
               new RTCSessionDescription({ type: 'offer', sdp: signal.sdp! }),
             )
