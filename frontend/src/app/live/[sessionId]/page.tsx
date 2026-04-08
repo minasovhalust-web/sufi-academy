@@ -106,22 +106,27 @@ function VideoTile({
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream
+    const el = videoRef.current
+    if (!el) return
+    if (stream) {
+      el.srcObject = stream
+      el.play().catch(() => { /* autoplay may be blocked */ })
+    } else {
+      el.srcObject = null
     }
   }, [stream])
 
   return (
     <div className="relative bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center w-full h-full">
-      {stream ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className="w-full h-full object-cover"
-        />
-      ) : (
+      {/* Always-mounted video element — hidden when no stream */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        className={`w-full h-full object-cover ${stream ? '' : 'hidden'}`}
+      />
+      {!stream && (
         <div className="flex flex-col items-center gap-2 text-gray-500">
           <VideoOff className="h-8 w-8" />
           <span className="text-xs">Нет видео</span>
@@ -154,19 +159,24 @@ function AudioOnlyTile({
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  // Attach the remote audio stream so the browser actually plays it
+  // Attach/detach the remote audio stream.
+  // The <audio> element is always in the DOM so the ref is never null.
   useEffect(() => {
-    if (audioRef.current && stream) {
-      audioRef.current.srcObject = stream
+    const el = audioRef.current
+    if (!el) return
+    if (stream && !isLocal) {
+      el.srcObject = stream
+      // Some browsers need an explicit play() after setting srcObject
+      el.play().catch(() => { /* autoplay blocked — user interaction needed */ })
+    } else {
+      el.srcObject = null
     }
-  }, [stream])
+  }, [stream, isLocal])
 
   return (
     <div className="relative bg-gray-800 rounded-xl overflow-hidden flex flex-col items-center justify-center w-full h-full gap-2 py-3 min-h-[80px]">
-      {/* Hidden audio element — plays the remote participant's audio */}
-      {stream && !isLocal && (
-        <audio ref={audioRef} autoPlay playsInline />
-      )}
+      {/* Always-mounted audio element for remote participant playback */}
+      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
       <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shrink-0">
         <span className="text-white font-bold text-base sm:text-xl select-none">{getInitials(name)}</span>
       </div>
@@ -495,14 +505,21 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       // 2. Acquire local media — BOTH video + audio from the start.
       //    Both tracks are added to every peer connection in createPeer(),
       //    so audio is always in the SDP. Mic toggle = track.enabled flip.
+      //    Fallback chain ensures audio works even if camera is denied.
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       } catch {
+        // Camera+audio failed — try audio only (most important for students)
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
         } catch {
-          stream = new MediaStream()
+          // Audio failed — try video only
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          } catch {
+            stream = new MediaStream()
+          }
         }
       }
 
