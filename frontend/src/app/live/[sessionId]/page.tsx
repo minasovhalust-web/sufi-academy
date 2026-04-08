@@ -447,6 +447,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       const pc = new RTCPeerConnection({ iceServers: iceServersRef.current })
+      console.log('[webrtc] createPeer', targetUserId, 'isInitiator:', isInitiator)
+      console.log('[webrtc] localStream tracks:', localStreamRef.current?.getTracks().map(t => `${t.kind} enabled:${t.enabled}`))
 
       // Add ALL tracks from localStream (video + audio) BEFORE creating offer.
       // Both tracks are present from the start so they're in the initial SDP.
@@ -456,6 +458,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       pc.onicecandidate = (event) => {
+        console.log('[webrtc] icecandidate', targetUserId, event.candidate?.type)
         if (event.candidate && socketRef.current?.connected) {
           socketRef.current.emit('webrtc-signal', {
             sessionId: sessionIdRef.current,
@@ -473,6 +476,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       pc.onconnectionstatechange = () => {
+        console.log('[webrtc] connectionState', targetUserId, pc.connectionState)
         if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
           setRemoteStreams((prev) => {
             const next = { ...prev }
@@ -573,6 +577,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       // Using named functions so each .on() is unique and .off() is precise.
 
       function onConnect() {
+        console.log('[socket] connected to /live')
         if (aborted) return
         setIsConnected(true)
         socket!.emit('join-session', { sessionId: sessionIdRef.current })
@@ -589,6 +594,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       function onException(data: { message: string }) {
+        console.error('[socket] exception:', data)
         if (!aborted) setError(data.message)
       }
 
