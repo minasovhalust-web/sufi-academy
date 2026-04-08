@@ -287,60 +287,102 @@ function LiveChatPanel({
 function ParticipantsPanel({
   participants,
   currentUserId,
+  isHost,
+  socket,
+  sessionId,
 }: {
   participants: Record<string, Participant>
   currentUserId: string
+  isHost: boolean
+  socket: Socket | null
+  sessionId: string
 }) {
   const list = Object.values(participants).filter((p) => p.userId !== currentUserId)
+  const students = list.filter((p) => p.role === 'STUDENT')
+
+  const muteUser = (userId: string) => {
+    socket?.emit('revoke-mic', { sessionId, targetUserId: userId })
+  }
+
+  const muteAll = () => {
+    for (const s of students) {
+      socket?.emit('revoke-mic', { sessionId, targetUserId: s.userId })
+    }
+  }
 
   return (
-    <div className="flex-1 overflow-y-auto p-3 space-y-2">
-      {list.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
-          <Users className="h-8 w-8 opacity-40" />
-          <p className="text-xs">Нет участников</p>
-        </div>
-      ) : (
-        list.map((p) => (
-          <div
-            key={p.userId}
-            className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
+    <div className="flex flex-col h-full">
+      {/* Mute-all button — host only */}
+      {isHost && students.length > 0 && (
+        <div className="px-3 pt-3 pb-1 shrink-0">
+          <button
+            onClick={muteAll}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 text-xs font-medium transition-colors"
           >
-            {/* Avatar */}
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
-              <span className="text-white font-bold text-sm select-none">
-                {getInitials(`${p.firstName} ${p.lastName}`)}
-              </span>
-            </div>
+            <MicOff className="h-3.5 w-3.5" />
+            Заглушить всех студентов
+          </button>
+        </div>
+      )}
 
-            {/* Name */}
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-base font-semibold truncate leading-tight">
-                {p.firstName} {p.lastName}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-gray-400 text-xs">
-                  {p.role === 'HOST' ? 'Хост' : 'Студент'}
+      {/* Participants list */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {list.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
+            <Users className="h-8 w-8 opacity-40" />
+            <p className="text-xs">Нет участников</p>
+          </div>
+        ) : (
+          list.map((p) => (
+            <div
+              key={p.userId}
+              className="flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-3"
+            >
+              {/* Avatar */}
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shrink-0">
+                <span className="text-white font-bold text-sm select-none">
+                  {getInitials(`${p.firstName} ${p.lastName}`)}
                 </span>
-                {p.handRaised && (
-                  <span className="text-yellow-400 text-xs font-medium animate-pulse">
-                    &#9995; Рука поднята
+              </div>
+
+              {/* Name */}
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-base font-semibold truncate leading-tight">
+                  {p.firstName} {p.lastName}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-gray-400 text-xs">
+                    {p.role === 'HOST' ? 'Хост' : 'Студент'}
                   </span>
+                  {p.handRaised && (
+                    <span className="text-yellow-400 text-xs font-medium animate-pulse">
+                      &#9995; Рука поднята
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Mic status + mute button */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {p.micEnabled ? (
+                  <Mic className="h-4 w-4 text-green-400" />
+                ) : (
+                  <MicOff className="h-4 w-4 text-gray-500" />
+                )}
+                {isHost && p.role === 'STUDENT' && p.micEnabled && (
+                  <button
+                    onClick={() => muteUser(p.userId)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors bg-red-600/30 hover:bg-red-600/50 text-red-300"
+                  >
+                    <MicOff className="h-3.5 w-3.5" />
+                    <span>Заглушить</span>
+                  </button>
                 )}
               </div>
             </div>
-
-            {/* Mic status */}
-            <div className="shrink-0">
-              {p.micEnabled ? (
-                <Mic className="h-4 w-4 text-green-400" />
-              ) : (
-                <MicOff className="h-4 w-4 text-gray-500" />
-              )}
-            </div>
-          </div>
-        ))
-      )}
+          ))
+        )}
+      </div>
     </div>
   )
 }
@@ -683,6 +725,15 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         }
       }
 
+      function onMicRevoked(data: { userId: string }) {
+        if (aborted) return
+        if (data.userId !== userIdRef.current) return
+        toast.info('Преподаватель отключил ваш микрофон', { duration: 4000 })
+        const audioTrack = localStreamRef.current?.getAudioTracks()[0]
+        if (audioTrack) audioTrack.enabled = false
+        setIsAudioEnabled(false)
+      }
+
       function onChatMessage(msg: ChatMessage) {
         if (!aborted) setChatMessages((prev) => [...prev, msg])
       }
@@ -706,6 +757,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       socket.on('participant-joined', onParticipantJoined)
       socket.on('participant-left', onParticipantLeft)
       socket.on('webrtc-signal', onWebRtcSignal)
+      socket.on('mic-revoked', onMicRevoked)
       socket.on('live-chat-message', onChatMessage)
       socket.on('session-ended', onSessionEnded)
     }
@@ -1156,6 +1208,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
+                  isHost={isHost}
+                  socket={socketRef.current}
+                  sessionId={sessionId}
                 />
               )}
             </div>
@@ -1355,6 +1410,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
+                  isHost={isHost}
+                  socket={socketRef.current}
+                  sessionId={sessionId}
                 />
               )}
             </div>

@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import { getRoleLabel, getCourseStatusLabel, getInitials } from '@/lib/utils'
 import { getCountryLabel } from '@/lib/countries'
-import { Trash2, Check, X, Clock, Mail } from 'lucide-react'
+import { Trash2, Pencil, Check, X, Clock, Mail } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth.store'
 
@@ -496,7 +496,14 @@ export default function AdminPage() {
                                   </Select>
                                 </td>
                                 <td className="p-2">{course._count?.enrollments || 0}</td>
-                                <td className="p-2">
+                                <td className="p-2 flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => router.push(`/teacher/courses/${course.id}`)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
                                   <Button
                                     variant="destructive"
                                     size="sm"
