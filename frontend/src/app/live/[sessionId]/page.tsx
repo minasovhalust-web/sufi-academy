@@ -262,14 +262,41 @@ function LiveChatPanel({
 function ParticipantsPanel({
   participants,
   currentUserId,
+  isHost,
+  socket,
+  sessionId,
 }: {
   participants: Record<string, Participant>
   currentUserId: string
+  isHost: boolean
+  socket: Socket | null
+  sessionId: string
 }) {
   const list = Object.values(participants).filter((p) => p.userId !== currentUserId)
+  const students = list.filter((p) => p.role !== 'HOST')
+
+  const muteUser = (targetUserId: string) => {
+    socket?.emit('revoke-mic', { sessionId, targetUserId })
+  }
+
+  const muteAll = () => {
+    students.forEach((p) => {
+      socket?.emit('revoke-mic', { sessionId, targetUserId: p.userId })
+    })
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      {isHost && students.length > 0 && (
+        <button
+          onClick={muteAll}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm font-medium transition-colors mb-2"
+        >
+          <MicOff className="h-4 w-4" />
+          Заглушить всех студентов
+        </button>
+      )}
+
       {list.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
           <Users className="h-8 w-8 opacity-40" />
@@ -304,6 +331,17 @@ function ParticipantsPanel({
                 )}
               </div>
             </div>
+
+            {/* Mute button (host only, students only) */}
+            {isHost && p.role !== 'HOST' && (
+              <button
+                onClick={() => muteUser(p.userId)}
+                className="shrink-0 p-1.5 rounded-md hover:bg-red-600/20 text-gray-400 hover:text-red-400 transition-colors"
+                title="Заглушить"
+              >
+                <MicOff className="h-4 w-4" />
+              </button>
+            )}
 
             {/* Mic status */}
             <div className="shrink-0">
@@ -642,6 +680,14 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       socket.on('webrtc-signal', onWebRtcSignal)
       socket.on('live-chat-message', onChatMessage)
       socket.on('session-ended', onSessionEnded)
+      socket.on('mic-revoked', () => {
+        const track = localStreamRef.current?.getAudioTracks()[0]
+        if (track) {
+          track.enabled = false
+          setIsAudioEnabled(false)
+        }
+        toast.info('Преподаватель отключил ваш микрофон')
+      })
     }
 
     initialize()
@@ -1089,6 +1135,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
+                  isHost={isHost}
+                  socket={socketRef.current}
+                  sessionId={sessionId}
                 />
               )}
             </div>
@@ -1288,6 +1337,9 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                 <ParticipantsPanel
                   participants={participants}
                   currentUserId={user?.id ?? ''}
+                  isHost={isHost}
+                  socket={socketRef.current}
+                  sessionId={sessionId}
                 />
               )}
             </div>
