@@ -735,6 +735,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
 
       socket.on('mic-granted', (data: { userId: string }) => {
         console.log('[socket] mic-granted received', data)
+        console.log('[mic-granted] data.userId:', data.userId, 'myId:', userIdRef.current, 'match:', data.userId === userIdRef.current)
         if (data.userId === userIdRef.current) {
           const track = localStreamRef.current?.getAudioTracks()[0]
           if (track) {
