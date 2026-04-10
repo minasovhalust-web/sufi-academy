@@ -634,6 +634,8 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         // the host can revoke the mic later via the mic-revoked event.
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
         if (audioTrack) audioTrack.enabled = true
+        const videoTrack = localStreamRef.current?.getVideoTracks()[0]
+        if (videoTrack) videoTrack.enabled = true
 
         // Create peer connections to all existing participants (we are initiator)
         for (const p of state.participants) {
