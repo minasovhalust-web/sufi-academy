@@ -83,17 +83,34 @@ export class NotificationsListener {
     courseId: string;
     hostId: string;
     title: string;
+    studentIds: string[];
   }): Promise<void> {
     try {
+      // Notify the host
       await this.notificationsService.notifyUser(
         payload.hostId,
         NotificationType.LIVE_SESSION_STARTED,
-        'Live session started',
-        `Your live session "${payload.title}" is now live!`,
+        'Эфир начался',
+        `Ваш живой урок "${payload.title}" теперь в эфире!`,
         { sessionId: payload.sessionId, courseId: payload.courseId },
       );
+
+      // Notify all enrolled students
+      if (payload.studentIds?.length) {
+        await Promise.all(
+          payload.studentIds.map((studentId) =>
+            this.notificationsService.notifyUser(
+              studentId,
+              NotificationType.LIVE_SESSION_STARTED,
+              'Начался живой урок',
+              `Преподаватель начал живой урок "${payload.title}". Присоединяйтесь прямо сейчас!`,
+              { sessionId: payload.sessionId, courseId: payload.courseId },
+            ),
+          ),
+        );
+      }
     } catch (err) {
-      this.logger.error(`onLiveSessionStarted failed: ${(err as Error).message}`, (err as Error).stack);
+      this.logger.error(`onLiveSessionStarted failed: ${(err as Error).message}`);
     }
   }
 

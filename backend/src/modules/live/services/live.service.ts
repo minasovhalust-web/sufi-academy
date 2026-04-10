@@ -108,11 +108,18 @@ export class LiveService {
       status: SessionStatus.LIVE,
       startedAt: new Date(),
     });
+
+    // Get all active students enrolled in this course
+    const studentIds = await this.liveRepository.findActiveStudentIds(
+      updatedSession.courseId,
+    );
+
     this.eventEmitter.emit('live.session.started', {
       sessionId: updatedSession.id,
       courseId: updatedSession.courseId,
       hostId: updatedSession.hostId,
       title: updatedSession.title,
+      studentIds,
     });
     return updatedSession;
   }

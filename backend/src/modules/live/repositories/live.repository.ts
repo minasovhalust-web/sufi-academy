@@ -50,6 +50,21 @@ export class LiveRepository {
   }
 
   /**
+   * Returns the user IDs of all students with ACTIVE enrollment in a course.
+   * Used for broadcasting notifications (e.g. when a live session starts).
+   */
+  async findActiveStudentIds(courseId: string): Promise<string[]> {
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        courseId,
+        status: EnrollmentStatus.ACTIVE,
+      },
+      select: { userId: true },
+    });
+    return enrollments.map((e) => e.userId);
+  }
+
+  /**
    * Returns true if the user is the course instructor OR has an
    * ACTIVE or COMPLETED enrollment in the course.
    * Used to authorise joining a live session.
