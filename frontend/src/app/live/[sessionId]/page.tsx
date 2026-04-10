@@ -620,25 +620,29 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           isHostRef.current = true
         }
 
-        // Sync local audio track with server-side micEnabled state
-        // BEFORE creating peer connections, so the correct enabled state
-        // is reflected in the initial SDP offers.
+        // Sync own mic state AFTER peer connections are created
         const selfParticipant = (state.participants as unknown as RawParticipant[]).find(
           (p) => (p.userId ?? p.user?.id) === userIdRef.current
         )
-        console.log('[session] selfParticipant micEnabled:', selfParticipant?.micEnabled, 'isHost:', currentlyHost)
-        if (selfParticipant) {
-          const track = localStreamRef.current?.getAudioTracks()[0]
-          if (track) {
-            track.enabled = selfParticipant.micEnabled ?? true
-            setIsAudioEnabled(selfParticipant.micEnabled ?? true)
-          }
-        }
 
-        // Create peer connections to all existing participants (we are initiator)
+        // Step 1: ensure track is enabled while creating peer connections (so SDP includes audio)
+        const audioTrack = localStreamRef.current?.getAudioTracks()[0]
+        if (audioTrack) audioTrack.enabled = true
+
+        // Step 2: create peer connections (track is enabled so it appears in SDP)
         for (const p of state.participants) {
           if (p.userId === userIdRef.current) continue
           await createPeer(p.userId, true)
+        }
+
+        // Step 3: apply real mic state AFTER peer connections established
+        if (selfParticipant) {
+          const micEnabled = selfParticipant.micEnabled ?? !currentlyHost
+          console.log('[session] selfParticipant micEnabled:', selfParticipant.micEnabled, 'isHost:', currentlyHost)
+          if (audioTrack) {
+            audioTrack.enabled = micEnabled
+            setIsAudioEnabled(micEnabled)
+          }
         }
       }
 
