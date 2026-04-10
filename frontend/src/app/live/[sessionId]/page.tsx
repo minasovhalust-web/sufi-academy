@@ -620,29 +620,16 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
           isHostRef.current = true
         }
 
-        // Sync own mic state AFTER peer connections are created
-        const selfParticipant = (state.participants as unknown as RawParticipant[]).find(
-          (p) => (p.userId ?? p.user?.id) === userIdRef.current
-        )
-
-        // Step 1: ensure track is enabled while creating peer connections (so SDP includes audio)
+        // Ensure local audio track is enabled so it appears in the initial SDP.
+        // Server-side micEnabled only affects UI, not the actual track state —
+        // the host can revoke the mic later via the mic-revoked event.
         const audioTrack = localStreamRef.current?.getAudioTracks()[0]
         if (audioTrack) audioTrack.enabled = true
 
-        // Step 2: create peer connections (track is enabled so it appears in SDP)
+        // Create peer connections to all existing participants (we are initiator)
         for (const p of state.participants) {
           if (p.userId === userIdRef.current) continue
           await createPeer(p.userId, true)
-        }
-
-        // Step 3: apply real mic state AFTER peer connections established
-        if (selfParticipant) {
-          const micEnabled = selfParticipant.micEnabled ?? !currentlyHost
-          console.log('[session] selfParticipant micEnabled:', selfParticipant.micEnabled, 'isHost:', currentlyHost)
-          if (audioTrack) {
-            audioTrack.enabled = micEnabled
-            setIsAudioEnabled(micEnabled)
-          }
         }
       }
 
