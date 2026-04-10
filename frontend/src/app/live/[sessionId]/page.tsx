@@ -151,8 +151,8 @@ function AudioOnlyTile({
 }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   useEffect(() => {
-    if (audioRef.current && stream && !isLocal) {
-      audioRef.current.srcObject = stream
+    if (audioRef.current && !isLocal) {
+      audioRef.current.srcObject = stream ?? null
     }
   }, [stream, isLocal])
 
@@ -173,7 +173,7 @@ function AudioOnlyTile({
         )}
         <span className="text-[10px] text-gray-400">{isMuted ? 'Откл.' : 'Говорит'}</span>
       </div>
-      {!isLocal && stream && (
+      {!isLocal && (
         <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
       )}
     </div>
@@ -481,9 +481,22 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       }
 
       pc.ontrack = (event) => {
-        const [remoteStream] = event.streams
-        if (remoteStream) {
-          setRemoteStreams((prev) => ({ ...prev, [targetUserId]: remoteStream }))
+        console.log('[webrtc] ontrack from', targetUserId, 'streams:', event.streams.length, 'track:', event.track.kind)
+
+        if (event.streams && event.streams[0]) {
+          // Standard path — stream provided
+          setRemoteStreams((prev) => ({ ...prev, [targetUserId]: event.streams[0] }))
+        } else {
+          // Fallback — build stream manually from track
+          setRemoteStreams((prev) => {
+            const existing = prev[targetUserId]
+            if (existing) {
+              existing.addTrack(event.track)
+              return { ...prev, [targetUserId]: existing }
+            }
+            const newStream = new MediaStream([event.track])
+            return { ...prev, [targetUserId]: newStream }
+          })
         }
       }
 
