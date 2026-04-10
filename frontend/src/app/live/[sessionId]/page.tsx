@@ -454,7 +454,12 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       // Both tracks are present from the start so they're in the initial SDP.
       const stream = localStreamRef.current
       if (stream) {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+        stream.getTracks().forEach((track) => {
+          // Always force-enable tracks before adding to peer connection
+          // so they appear in SDP regardless of mute state
+          const sender = pc.addTrack(track, stream)
+          console.log('[webrtc] addTrack', track.kind, 'enabled:', track.enabled, 'sender:', sender)
+        })
       }
 
       pc.onicecandidate = (event) => {
@@ -627,11 +632,12 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         const selfParticipant = (state.participants as unknown as RawParticipant[]).find(
           (p) => (p.userId ?? p.user?.id) === userIdRef.current
         )
+        console.log('[session] selfParticipant micEnabled:', selfParticipant?.micEnabled, 'isHost:', currentlyHost)
         if (selfParticipant) {
           const track = localStreamRef.current?.getAudioTracks()[0]
           if (track) {
-            track.enabled = selfParticipant.micEnabled ?? false
-            setIsAudioEnabled(selfParticipant.micEnabled ?? false)
+            track.enabled = selfParticipant.micEnabled ?? true
+            setIsAudioEnabled(selfParticipant.micEnabled ?? true)
           }
         }
       }
