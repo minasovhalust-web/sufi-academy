@@ -142,14 +142,20 @@ function VideoTile({
 // ── AudioOnlyTile — student without camera ────────────────────────────────────
 
 function AudioOnlyTile({
-  name,
-  isMuted = true,
-  isLocal = false,
+  name, isMuted = true, isLocal = false, stream = null,
 }: {
   name: string
   isMuted?: boolean
   isLocal?: boolean
+  stream?: MediaStream | null
 }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  useEffect(() => {
+    if (audioRef.current && stream && !isLocal) {
+      audioRef.current.srcObject = stream
+    }
+  }, [stream, isLocal])
+
   return (
     <div className="relative bg-gray-800 rounded-xl overflow-hidden flex flex-col items-center justify-center w-full h-full gap-2 py-3 min-h-[80px]">
       <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shrink-0">
@@ -167,6 +173,9 @@ function AudioOnlyTile({
         )}
         <span className="text-[10px] text-gray-400">{isMuted ? 'Откл.' : 'Говорит'}</span>
       </div>
+      {!isLocal && stream && (
+        <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      )}
     </div>
   )
 }
@@ -1181,6 +1190,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                       name={tile.name}
                       isMuted={!tile.micEnabled}
                       isLocal={tile.isLocal}
+                      stream={tile.stream}
                     />
                   )}
                 </div>
