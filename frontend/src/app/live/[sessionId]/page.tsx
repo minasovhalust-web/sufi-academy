@@ -722,6 +722,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       socket.on('session-ended', onSessionEnded)
 
       socket.on('mic-revoked', (data: { userId: string }) => {
+        console.log('[socket] mic-revoked received', data)
         if (data.userId === userIdRef.current) {
           const track = localStreamRef.current?.getAudioTracks()[0]
           if (track) {
@@ -733,6 +734,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       })
 
       socket.on('mic-granted', (data: { userId: string }) => {
+        console.log('[socket] mic-granted received', data)
         if (data.userId === userIdRef.current) {
           const track = localStreamRef.current?.getAudioTracks()[0]
           if (track) {
@@ -744,6 +746,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       })
 
       socket.on('mic-state-changed', (data: { userId: string; micEnabled?: boolean }) => {
+        console.log('[socket] mic-state-changed received', data)
         setParticipants((prev) => {
           const p = prev[data.userId]
           if (!p) return prev
