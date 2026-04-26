@@ -202,32 +202,12 @@ export const chatApi = {
 
 // Storage API — file uploads for chat attachments
 export const storageApi = {
-  /**
-   * Upload any file (image, video, audio, pdf, doc) as a chat attachment.
-   * Returns { key, url, name, mimeType, size }.
-   * url is a 30-day signed S3 URL suitable for embedding in chat messages.
-   */
   upload: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    // Upload directly to server IP to bypass Cloudflare upload restrictions
-    const directClient = axios.create({
-      baseURL: 'https://muzasufy.com/api/v1',
-      withCredentials: true,
+    return apiClient.post('/storage/upload', form, {
       timeout: 300000,
     })
-    // Read auth token from Zustand persisted store (localStorage key: 'auth-storage')
-    let token: string | null = null
-    try {
-      const raw = localStorage.getItem('auth-storage')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        token = parsed?.state?.accessToken ?? null
-      }
-    } catch { /* ignore */ }
-    const headers: Record<string, string> = {}
-    if (token) headers['Authorization'] = `Bearer ${token}`
-    return directClient.post('/storage/upload', form, { headers })
   },
 }
 
