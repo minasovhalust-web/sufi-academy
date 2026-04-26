@@ -210,13 +210,24 @@ export const storageApi = {
   upload: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    // Use direct API client but with longer timeout for large files
-    return apiClient.post('/storage/upload', form, {
-      timeout: 300000, // 5 minutes
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    // Upload directly to server IP to bypass Cloudflare upload restrictions
+    const directClient = axios.create({
+      baseURL: 'https://muzasufy.com/api/v1',
+      withCredentials: true,
+      timeout: 300000,
     })
+    // Read auth token from Zustand persisted store (localStorage key: 'auth-storage')
+    let token: string | null = null
+    try {
+      const raw = localStorage.getItem('auth-storage')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        token = parsed?.state?.accessToken ?? null
+      }
+    } catch { /* ignore */ }
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    return directClient.post('/storage/upload', form, { headers })
   },
 }
 
