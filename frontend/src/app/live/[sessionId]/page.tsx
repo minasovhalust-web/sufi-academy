@@ -1141,7 +1141,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Users className="h-4 w-4" />
-            <span>{allTiles.length}</span>
+            <span>{Object.keys(participants).length + 1}</span>
           </div>
           {!isConnected && (
             <span className="text-yellow-500 text-xs flex items-center gap-1">
