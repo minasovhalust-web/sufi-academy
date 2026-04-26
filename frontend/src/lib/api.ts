@@ -210,10 +210,13 @@ export const storageApi = {
   upload: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    // No Content-Type override — the request interceptor above detects FormData
-    // and removes the 'application/json' default, letting the browser set
-    // 'multipart/form-data; boundary=...' automatically.
-    return apiClient.post('/storage/upload', form)
+    // Use direct API client but with longer timeout for large files
+    return apiClient.post('/storage/upload', form, {
+      timeout: 300000, // 5 minutes
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
   },
 }
 
