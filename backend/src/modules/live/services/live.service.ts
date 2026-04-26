@@ -68,12 +68,32 @@ export class LiveService {
       }
     }
 
-    return this.liveRepository.createSession({
+    const session = await this.liveRepository.createSession({
       title: dto.title,
       courseId: dto.courseId,
       hostId: requesterId,
       scheduledAt: dto.scheduledAt,
     });
+
+    // Auto-start: immediately set status to LIVE
+    const liveSession = await this.liveRepository.updateSession(session.id, {
+      status: SessionStatus.LIVE,
+      startedAt: new Date(),
+    });
+
+    // Notify enrolled students
+    const studentIds = await this.liveRepository.findActiveStudentIds(
+      liveSession.courseId,
+    );
+    this.eventEmitter.emit('live.session.started', {
+      sessionId: liveSession.id,
+      courseId: liveSession.courseId,
+      hostId: liveSession.hostId,
+      title: liveSession.title,
+      studentIds,
+    });
+
+    return liveSession;
   }
 
   async findSessionById(id: string): Promise<LiveSessionWithRelations> {

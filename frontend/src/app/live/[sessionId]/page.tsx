@@ -664,6 +664,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (aborted) return
         const p = normalizeParticipant(data)
         setParticipants((prev) => ({ ...prev, [p.userId]: p }))
+        toast.info(`${p.firstName || 'Участник'} присоединился к эфиру`)
       }
 
       function onParticipantLeft(data: { userId: string }) {
@@ -1075,7 +1076,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Users className="h-4 w-4" />
-            <span>{allTiles.length}</span>
+            <span>{Object.keys(participants).length + 1}</span>
           </div>
           {!isConnected && (
             <span className="text-yellow-500 text-xs flex items-center gap-1">
@@ -1244,22 +1245,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             >
               {isVideoEnabled ? <VideoIcon className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
               <span className="text-[10px] leading-none">Камера</span>
-            </button>
-          )}
-
-          {/* Start broadcast — host only, when SCHEDULED */}
-          {isHost && session?.status === 'SCHEDULED' && (
-            <button
-              onClick={handleStartBroadcast}
-              disabled={isStartingLive}
-              className="flex flex-col items-center gap-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
-            >
-              {isStartingLive ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Radio className="h-5 w-5" />
-              )}
-              <span className="text-[10px] leading-none">Эфир</span>
             </button>
           )}
 
