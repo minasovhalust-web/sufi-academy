@@ -426,9 +426,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
   // ── Recording ──────────────────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false)
   const [isUploadingRecording, setIsUploadingRecording] = useState(false)
-  const [recordingTitle, setRecordingTitle] = useState('')
-  const [showSaveDialog, setShowSaveDialog] = useState(false)
-  const [pendingBlob, setPendingBlob] = useState<Blob | null>(null)
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const socketRef = useRef<Socket | null>(null)
@@ -664,7 +661,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (aborted) return
         const p = normalizeParticipant(data)
         setParticipants((prev) => ({ ...prev, [p.userId]: p }))
-        toast.info(`${p.firstName || 'Участник'} присоединился к эфиру`)
       }
 
       function onParticipantLeft(data: { userId: string }) {
@@ -875,21 +871,125 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
     if (!localStreamRef.current) return
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
       ? 'video/webm;codecs=vp8,opus'
-      : MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : 'video/mp4'
+      : MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
+      : 'video/mp4'
+
     try {
-      const recorder = new MediaRecorder(localStreamRef.current, { mimeType })
+      // Build a combined stream: local video + local audio (force-enabled for recording).
+      // This ensures the recording always captures audio even if the track was toggled off in UI.
+      const recordingStream = new MediaStream()
+
+      // Add all video tracks from local stream
+      for (const vt of localStreamRef.current.getVideoTracks()) {
+        recordingStream.addTrack(vt)
+      }
+
+      // Add local audio if available — temporarily enable so MediaRecorder captures it
+      for (const at of localStreamRef.current.getAudioTracks()) {
+        at.enabled = true
+        recordingStream.addTrack(at)
+      }
+      if (localStreamRef.current.getAudioTracks().length > 0) {
+        setIsAudioEnabled(true)
+      }
+
+      const recorder = new MediaRecorder(recordingStream, { mimeType })
       recordedChunksRef.current = []
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunksRef.current.push(e.data)
       }
-      recorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+
+      recorder.onstop = async () => {
+        setIsUploadingRecording(true)
+        const chunks = [...recordedChunksRef.current]
         recordedChunksRef.current = []
-        setPendingBlob(blob)
-        setRecordingTitle(session?.title ? `Запись — ${session.title}` : `Запись эфира ${new Date().toLocaleDateString('ru-RU')}`)
-        setShowSaveDialog(true)
+        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+        const dateStr = new Date().toLocaleDateString('ru-RU')
+        const filename = `live-recording-${sessionId}.${ext}`
+        const title = `Запись эфира ${dateStr}`
+        const courseId = session?.courseId
+
+        try {
+          const blob = new Blob(chunks, { type: mimeType })
+          const file = new File([blob], filename, { type: mimeType })
+
+          // 1. Upload to storage
+          const uploadRes = await storageApi.upload(file)
+          const uploadData = uploadRes.data?.data ?? uploadRes.data
+          const storageKey: string =
+            (uploadData as { url?: string })?.url ??
+            (uploadData as { key?: string })?.key ??
+            ''
+
+          // 2. Create module + lesson + video if courseId is available
+          if (courseId && storageKey) {
+            try {
+              // Create a new module for the recording
+              const modRes = await coursesApi.createModule(courseId, {
+                title: `Запись эфира ${dateStr}`,
+              })
+              const mod = modRes.data?.data ?? modRes.data
+              const moduleId: string = (mod as { id: string }).id
+
+              // Create a lesson inside the module
+              const lessonRes = await coursesApi.createLesson(courseId, moduleId, {
+                title,
+              })
+              const lesson = lessonRes.data?.data ?? lessonRes.data
+              const lessonId: string = (lesson as { id: string }).id
+
+              // Attach the video to the lesson
+              await videosApi.create({
+                title,
+                lessonId,
+                storageKey,
+                mimeType,
+                duration: 0,
+              })
+
+              toast.success('Запись сохранена как новый урок', {
+                description: `${title} — добавлен в курс`,
+                duration: 10000,
+              })
+            } catch (lessonErr) {
+              console.error('[recording] Failed to create lesson:', lessonErr)
+              // Upload succeeded but lesson creation failed — still inform user
+              toast.success('Запись загружена', {
+                description: 'Не удалось автоматически создать урок. Файл сохранён в хранилище.',
+                duration: 10000,
+              })
+            }
+          } else {
+            toast.success('Запись загружена', {
+              description: title,
+              duration: 10000,
+            })
+          }
+        } catch (uploadErr) {
+          console.error('[recording] Upload failed, falling back to local download:', uploadErr)
+          // Fallback: trigger browser download directly from memory
+          try {
+            const blob = new Blob(chunks, { type: mimeType })
+            const objectUrl = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = objectUrl
+            a.download = filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000)
+            toast.success('Запись скачивается...', { description: title })
+          } catch {
+            toast.error('Не удалось сохранить запись')
+          }
+        } finally {
+          setIsUploadingRecording(false)
+        }
       }
-      recorder.start(1000)
+
+      recorder.start(1000) // collect data every second
       mediaRecorderRef.current = recorder
       setIsRecording(true)
     } catch (err) {
@@ -904,41 +1004,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       mediaRecorderRef.current = null
     }
     setIsRecording(false)
-  }
-
-  const handleSaveRecording = async () => {
-    if (!pendingBlob) return
-    setIsUploadingRecording(true)
-    setShowSaveDialog(false)
-    const mimeType = pendingBlob.type
-    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
-    const filename = `live-recording-${sessionId}.${ext}`
-    const title = recordingTitle.trim() || `Запись эфира ${new Date().toLocaleDateString('ru-RU')}`
-    const courseId = session?.courseId
-    try {
-      const file = new File([pendingBlob], filename, { type: mimeType })
-      const uploadRes = await storageApi.upload(file)
-      const uploadData = uploadRes.data?.data ?? uploadRes.data
-      const storageKey: string = (uploadData as { url?: string })?.url ?? (uploadData as { key?: string })?.key ?? ''
-      if (courseId && storageKey) {
-        const modRes = await coursesApi.createModule(courseId, { title })
-        const mod = modRes.data?.data ?? modRes.data
-        const moduleId: string = (mod as { id: string }).id
-        const lessonRes = await coursesApi.createLesson(courseId, moduleId, { title })
-        const lesson = lessonRes.data?.data ?? lessonRes.data
-        const lessonId: string = (lesson as { id: string }).id
-        await videosApi.create({ title, lessonId, storageKey, mimeType, duration: 0 })
-        toast.success('Запись сохранена как урок!', { description: title, duration: 8000 })
-      } else {
-        toast.success('Запись загружена', { description: title })
-      }
-    } catch (err) {
-      console.error('[recording] Save failed:', err)
-      toast.error('Не удалось сохранить запись')
-    } finally {
-      setIsUploadingRecording(false)
-      setPendingBlob(null)
-    }
   }
 
   // ── Derived rendering data ─────────────────────────────────────────────────
@@ -1076,7 +1141,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-gray-400 text-sm">
             <Users className="h-4 w-4" />
-            <span>{Object.keys(participants).length + 1}</span>
+            <span>{allTiles.length}</span>
           </div>
           {!isConnected && (
             <span className="text-yellow-500 text-xs flex items-center gap-1">
@@ -1248,6 +1313,22 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
             </button>
           )}
 
+          {/* Start broadcast — host only, when SCHEDULED */}
+          {isHost && session?.status === 'SCHEDULED' && (
+            <button
+              onClick={handleStartBroadcast}
+              disabled={isStartingLive}
+              className="flex flex-col items-center gap-1 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 min-w-[52px] min-h-[52px] sm:min-w-[56px] sm:min-h-[56px] justify-center px-2"
+            >
+              {isStartingLive ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Radio className="h-5 w-5" />
+              )}
+              <span className="text-[10px] leading-none">Эфир</span>
+            </button>
+          )}
+
           {/* Recording — host only */}
           {isHost && (
             isRecording ? (
@@ -1395,38 +1476,6 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
                   sessionId={sessionId}
                 />
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSaveDialog && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70">
-          <div className="bg-gray-900 rounded-2xl p-6 w-full max-w-sm mx-4 flex flex-col gap-4 border border-gray-700">
-            <h2 className="text-white text-lg font-semibold">Сохранить запись</h2>
-            <p className="text-gray-400 text-sm">Введите название для урока</p>
-            <input
-              type="text"
-              value={recordingTitle}
-              onChange={(e) => setRecordingTitle(e.target.value)}
-              placeholder="Название записи..."
-              className="bg-gray-800 text-white rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowSaveDialog(false); setPendingBlob(null) }}
-                className="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium transition-colors"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={handleSaveRecording}
-                disabled={isUploadingRecording}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {isUploadingRecording ? 'Сохранение...' : 'Сохранить'}
-              </button>
             </div>
           </div>
         </div>
