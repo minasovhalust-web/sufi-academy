@@ -572,11 +572,18 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       let stream: MediaStream
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      } catch {
+      } catch (e1) {
+        console.error('[media] getUserMedia video+audio failed:', e1)
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        } catch {
-          stream = new MediaStream()
+        } catch (e2) {
+          console.error('[media] getUserMedia video only failed:', e2)
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+          } catch (e3) {
+            console.error('[media] getUserMedia audio only failed:', e3)
+            stream = new MediaStream()
+          }
         }
       }
 
