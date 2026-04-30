@@ -205,10 +205,11 @@ export const storageApi = {
   upload: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    // Use apiClient which has auto token refresh via interceptors
-    return apiClient.post('/storage/upload', form, {
+    const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
+    const token = authState?.state?.accessToken ?? ''
+    return axios.post('https://upload.muzasufy.com/api/v1/storage/upload', form, {
       timeout: 300000,
-      baseURL: 'https://upload.muzasufy.com/api/v1',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
   },
 }
