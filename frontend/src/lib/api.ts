@@ -208,6 +208,7 @@ export const storageApi = {
     // Use direct subdomain (DNS only, no Cloudflare proxy) for large file uploads
     const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
     const token = authState?.state?.accessToken ?? ''
+    console.log('[upload] token length:', token.length, 'first 20:', token.substring(0, 20))
     return axios.post('https://upload.muzasufy.com/api/v1/storage/upload', form, {
       timeout: 300000,
       headers: token ? { Authorization: `Bearer ${token}` } : {},
