@@ -890,8 +890,19 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         if (e.data.size > 0) recordedChunksRef.current.push(e.data)
       }
       recorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType })
+        const chunks = [...recordedChunksRef.current]
         recordedChunksRef.current = []
+        if (chunks.length === 0) {
+          toast.error('Запись пустая — попробуйте ещё раз')
+          return
+        }
+        // Force correct mimeType — chunks may lose type info
+        const blob = new Blob(chunks, { type: mimeType || 'video/webm' })
+        console.log('[recording] blob size:', blob.size, 'type:', blob.type)
+        if (blob.size < 100) {
+          toast.error('Запись слишком короткая')
+          return
+        }
         setPendingBlob(blob)
         setRecordingTitle(session?.title ? `Запись — ${session.title}` : `Запись эфира ${new Date().toLocaleDateString('ru-RU')}`)
         setShowSaveDialog(true)
