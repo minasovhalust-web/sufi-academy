@@ -202,15 +202,19 @@ export const chatApi = {
 
 // Storage API — file uploads for chat attachments
 export const storageApi = {
-  upload: (file: File) => {
+  upload: async (file: File) => {
     const form = new FormData()
     form.append('file', file)
     const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
     const token = authState?.state?.accessToken ?? ''
-    return axios.post('https://upload.muzasufy.com/api/v1/storage/upload', form, {
-      timeout: 300000,
+    const response = await fetch('https://upload.muzasufy.com/api/v1/storage/upload', {
+      method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
     })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data?.message ?? 'Upload failed')
+    return { data }
   },
 }
 
