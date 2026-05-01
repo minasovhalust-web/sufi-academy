@@ -80,10 +80,18 @@ export class StorageController {
       );
     }
 
-    if (!isAllowedMime(file.mimetype)) {
+    // if (!isAllowedMime(file.mimetype)) {
+    //   throw new BadRequestException(
+    //     `File type "${file.mimetype}" is not allowed. ` +
+    //       'Permitted types: images, video, audio, PDF, Word documents.',
+    //   );
+    // }
+
+    const fileExt = file.originalname.split('.').pop()?.toLowerCase() ?? '';
+    const allowedExts = ['jpg','jpeg','png','gif','webp','mp4','webm','mov','avi','mp3','wav','ogg','pdf','doc','docx'];
+    if (!allowedExts.includes(fileExt)) {
       throw new BadRequestException(
-        `File type "${file.mimetype}" is not allowed. ` +
-          'Permitted types: images, video, audio, PDF, Word documents.',
+        `File type "${file.mimetype}" is not allowed.`,
       );
     }
 
