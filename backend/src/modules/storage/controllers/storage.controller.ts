@@ -34,8 +34,10 @@ const ALLOWED_MIME_EXACT = [
 ];
 
 function isAllowedMime(mime: string): boolean {
-  if (ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p))) return true;
-  if (ALLOWED_MIME_EXACT.includes(mime)) return true;
+  // Normalize — strip codec params (e.g. "video/webm;codecs=vp8,opus" → "video/webm")
+  const baseMime = mime.split(';')[0].trim().toLowerCase();
+  if (ALLOWED_MIME_PREFIXES.some((p) => baseMime.startsWith(p))) return true;
+  if (ALLOWED_MIME_EXACT.includes(baseMime)) return true;
   return false;
 }
 

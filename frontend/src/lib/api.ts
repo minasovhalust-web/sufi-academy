@@ -203,17 +203,25 @@ export const chatApi = {
 // Storage API — file uploads for chat attachments
 export const storageApi = {
   upload: async (file: File) => {
-    const form = new FormData()
-    form.append('file', file)
     const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
     const token = authState?.state?.accessToken ?? ''
+
+    // Create a new File with explicit mimeType to ensure it's preserved
+    const mimeType = file.type || 'video/webm'
+    const renamedFile = new File([file], file.name, { type: mimeType })
+
+    const form = new FormData()
+    form.append('file', renamedFile)
+
+    console.log('[upload] file type:', renamedFile.type, 'size:', renamedFile.size)
+
     const response = await fetch('https://upload.muzasufy.com/api/v1/storage/upload', {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     })
     const data = await response.json()
-    if (!response.ok) throw new Error(data?.message ?? 'Upload failed')
+    if (!response.ok) throw new Error(data?.message ?? `Upload failed: ${response.status}`)
     return { data }
   },
 }
