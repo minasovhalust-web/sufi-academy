@@ -582,6 +582,7 @@ function ModuleItem({ module, courseId }: { module: CourseModule; courseId: stri
   const [addingLesson, setAddingLesson] = useState(false)
   const [lessonTitle, setLessonTitle] = useState('')
   const [lessonDuration, setLessonDuration] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const { data: lessonsData, isLoading: lessonsLoading } = useCourseLessons(courseId, module.id)
   const { mutate: createLesson, isPending: lessonPending } = useCreateLesson(courseId, module.id)
@@ -611,26 +612,50 @@ function ModuleItem({ module, courseId }: { module: CourseModule; courseId: stri
     )
   }
 
+  const handleDeleteModule = async () => {
+    if (!confirm('Удалить модуль и все его уроки?')) return
+    setDeleting(true)
+    try {
+      await apiClient.delete(`/courses/${courseId}/modules/${module.id}`)
+      queryClient.invalidateQueries({ queryKey: ['courses', courseId, 'modules'] })
+      toast.success('Модуль удалён')
+    } catch {
+      toast.error('Не удалось удалить модуль')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <Card className="overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 transition-colors"
-      >
-        {expanded ? (
-          <ChevronDown className="h-5 w-5 text-gray-400 shrink-0" />
-        ) : (
-          <ChevronRight className="h-5 w-5 text-gray-400 shrink-0" />
-        )}
-        <div className="flex-1">
-          <p className="font-semibold">{module.title}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Модуль {module.order} · {lessons.length} уроков
-          </p>
-        </div>
-        <Badge variant="outline" className="shrink-0">{lessons.length}</Badge>
-      </button>
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 flex items-center gap-3 px-6 py-4 text-left hover:bg-gray-50 transition-colors"
+        >
+          {expanded ? (
+            <ChevronDown className="h-5 w-5 text-gray-400 shrink-0" />
+          ) : (
+            <ChevronRight className="h-5 w-5 text-gray-400 shrink-0" />
+          )}
+          <div className="flex-1">
+            <p className="font-semibold">{module.title}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Модуль {module.order} · {lessons.length} уроков
+            </p>
+          </div>
+          <Badge variant="outline" className="shrink-0">{lessons.length}</Badge>
+        </button>
+        <button
+          onClick={handleDeleteModule}
+          disabled={deleting}
+          className="mr-4 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50 shrink-0"
+          title="Удалить модуль"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
 
       {expanded && (
         <CardContent className="border-t pt-4 space-y-3">
