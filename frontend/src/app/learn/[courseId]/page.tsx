@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import type { Video, Material, Lesson, LiveSession } from '@/types'
+import { LiveSessionsPanel } from '@/components/live/LiveSessionsPanel'
 import {
   ChevronDown,
   Clock,
@@ -837,7 +838,7 @@ function ChatPanel({
 
 // ── Page ────────────────────────────────────────────────────────────────────
 
-type ActiveTab = 'lesson' | 'chat'
+type ActiveTab = 'lesson' | 'chat' | 'live'
 
 export default function LearnPage({ params }: { params: { courseId: string } }) {
   // Prevent hydration mismatch: Zustand reads localStorage only on the client,
@@ -1314,6 +1315,17 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'live'
+                  ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Radio className="h-4 w-4" />
+              Эфиры
+            </button>
           </div>
 
           {/* Tab content */}
@@ -1332,6 +1344,8 @@ export default function LearnPage({ params }: { params: { courseId: string } }) 
                   </div>
                 )}
               </div>
+            ) : activeTab === 'live' ? (
+              <LiveSessionsPanel courseId={params.courseId} />
             ) : (
               <ChatPanel courseId={params.courseId} onNewMessage={handleChatMessage} />
             )}

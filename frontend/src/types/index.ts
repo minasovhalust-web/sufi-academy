@@ -131,6 +131,7 @@ export interface LiveSession {
   id: string
   title: string
   status: 'SCHEDULED' | 'LIVE' | 'ENDED'
+  scheduledAt?: string
   startedAt?: string
   endedAt?: string
   hostId: string

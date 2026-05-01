@@ -945,7 +945,7 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
         const lessonRes = await coursesApi.createLesson(courseId, moduleId, { title, order: 1 })
         const lesson = lessonRes.data?.data ?? lessonRes.data
         const lessonId: string = (lesson as { id: string }).id
-        await videosApi.create({ title, lessonId, storageKey, mimeType, duration: 0 })
+        await videosApi.create({ title, lessonId, storageKey, mimeType, duration: 1 })
         toast.success('Запись сохранена как урок!', { description: title, duration: 8000 })
       } else {
         toast.success('Запись загружена', { description: title })

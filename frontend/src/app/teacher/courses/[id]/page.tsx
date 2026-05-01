@@ -1001,6 +1001,106 @@ function StudentProgressGrid({ courseId }: { courseId: string }) {
   )
 }
 
+// ── LiveSessionsList ────────────────────────────────────────────────────────
+
+function LiveSessionsList({ courseId }: { courseId: string }) {
+  const router = useRouter()
+  const [sessions, setSessions] = useState<Array<{ id: string; title: string; status: string; createdAt: string }>>([])
+  const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [endingId, setEndingId] = useState<string | null>(null)
+
+  const fetchSessions = () => {
+    liveApi.getSessionsByCourse(courseId)
+      .then(res => setSessions(res.data?.data ?? res.data ?? []))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }
+
+  useState(() => { fetchSessions() })
+
+  const handleEndSession = async (sessionId: string) => {
+    setEndingId(sessionId)
+    try {
+      await liveApi.endSession(sessionId)
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'ENDED' } : s))
+      toast.success('Эфир завершён')
+    } catch {
+      toast.error('Не удалось завершить эфир')
+    } finally {
+      setEndingId(null)
+    }
+  }
+
+  if (loading) return <p className="text-sm text-gray-400 py-2">Загрузка эфиров...</p>
+  if (sessions.length === 0) return <p className="text-sm text-gray-400 py-2">Эфиров пока нет</p>
+
+  return (
+    <div className="space-y-2">
+      {sessions.map(session => (
+        <div key={session.id} className={`flex items-center gap-3 rounded-lg border p-3 ${
+          session.status === 'LIVE' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'
+        }`}>
+          <Radio className={`h-4 w-4 shrink-0 ${session.status === 'LIVE' ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
+          <div className="flex-1 min-w-0">
+            {editingId === session.id ? (
+              <input
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                onBlur={() => setEditingId(null)}
+                onKeyDown={e => { if (e.key === 'Enter') setEditingId(null) }}
+                className="text-sm font-medium w-full border-b border-gray-300 bg-transparent outline-none py-0.5"
+                autoFocus
+              />
+            ) : (
+              <p
+                className="text-sm font-medium truncate cursor-pointer hover:text-indigo-600"
+                onClick={() => { setEditingId(session.id); setEditTitle(session.title) }}
+                title="Нажмите чтобы редактировать"
+              >
+                {session.title}
+              </p>
+            )}
+            <p className="text-xs text-gray-400">
+              {new Date(session.createdAt).toLocaleString('ru-RU')}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {session.status === 'LIVE' && (
+              <>
+                <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">LIVE</span>
+                <Button size="sm" variant="outline" onClick={() => router.push(`/live/${session.id}`)}>
+                  Войти
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={endingId === session.id}
+                  onClick={() => handleEndSession(session.id)}
+                >
+                  {endingId === session.id ? 'Завершение...' : 'Завершить'}
+                </Button>
+              </>
+            )}
+            {session.status === 'ENDED' && (
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">Завершён</span>
+            )}
+            {session.status === 'SCHEDULED' && (
+              <>
+                <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">Запланирован</span>
+                <Button size="sm" variant="outline" onClick={() => router.push(`/live/${session.id}`)}>
+                  Войти
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function TeacherCourseManagePage({
@@ -1298,9 +1398,9 @@ export default function TeacherCourseManagePage({
             <p className="text-red-500 mb-8">Курс не найден</p>
           )}
 
-          {/* Live session button */}
+          {/* Live session section */}
           {course && (
-            <div className="mt-6 pt-5 border-t border-gray-200">
+            <div className="mt-6 pt-5 border-t border-gray-200 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-semibold">Живые уроки</h2>
@@ -1317,6 +1417,7 @@ export default function TeacherCourseManagePage({
                   {creatingLiveSession ? 'Создание...' : 'Создать живой урок'}
                 </Button>
               </div>
+              <LiveSessionsList courseId={courseId} />
             </div>
           )}
 
