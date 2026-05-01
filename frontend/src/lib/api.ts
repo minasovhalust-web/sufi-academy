@@ -266,6 +266,8 @@ export const liveApi = {
   getSession: (sessionId: string) => apiClient.get(`/live/sessions/${sessionId}`),
   getSessionsByCourse: (courseId: string) => apiClient.get(`/live/sessions/course/${courseId}`),
   getParticipants: (sessionId: string) => apiClient.get(`/live/sessions/${sessionId}/participants`),
+  deleteSession: (sessionId: string) => apiClient.delete(`/live/sessions/${sessionId}`),
+  updateSession: (sessionId: string, dto: { title?: string }) => apiClient.patch(`/live/sessions/${sessionId}`, dto),
 }
 
 // Videos API

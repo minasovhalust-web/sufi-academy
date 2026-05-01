@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -86,6 +87,12 @@ export class LiveController {
   @HttpCode(HttpStatus.OK)
   end(@Param('id') id: string, @Req() req: any) {
     return this.liveService.endSession(id, req.user.sub, req.user.role);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.liveService.deleteSession(id, req.user.sub, req.user.role);
   }
 
   // ── Read ───────────────────────────────────────────────────────────────────

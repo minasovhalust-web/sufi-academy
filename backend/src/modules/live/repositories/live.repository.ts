@@ -143,6 +143,10 @@ export class LiveRepository {
     });
   }
 
+  async deleteSession(sessionId: string) {
+    return this.prisma.liveSession.delete({ where: { id: sessionId } });
+  }
+
   // ── LiveParticipant CRUD ────────────────────────────────────────────────────
 
   /**

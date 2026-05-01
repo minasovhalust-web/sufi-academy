@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { liveApi } from '@/lib/api'
-import { Radio, Calendar } from 'lucide-react'
+import { Radio, Calendar, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { LiveSession } from '@/types'
 
-export function LiveSessionsPanel({ courseId }: { courseId: string }) {
+export function LiveSessionsPanel({ courseId, isTeacher = false }: { courseId: string; isTeacher?: boolean }) {
   const router = useRouter()
   const [sessions, setSessions] = useState<LiveSession[]>([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     liveApi.getSessionsByCourse(courseId)
@@ -17,6 +19,20 @@ export function LiveSessionsPanel({ courseId }: { courseId: string }) {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [courseId])
+
+  const handleDelete = async (sessionId: string) => {
+    if (!confirm('Удалить этот эфир?')) return
+    setDeletingId(sessionId)
+    try {
+      await liveApi.deleteSession(sessionId)
+      setSessions(prev => prev.filter(s => s.id !== sessionId))
+      toast.success('Эфир удалён')
+    } catch {
+      toast.error('Не удалось удалить эфир')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
@@ -69,6 +85,16 @@ export function LiveSessionsPanel({ courseId }: { courseId: string }) {
               </div>
             )}
           </div>
+          {isTeacher && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(session.id) }}
+              disabled={deletingId === session.id}
+              className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+              title="Удалить эфир"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ))}
     </div>

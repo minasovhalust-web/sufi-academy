@@ -175,6 +175,20 @@ export class LiveService {
     return updatedSession;
   }
 
+  async deleteSession(
+    sessionId: string,
+    requesterId: string,
+    requesterRole: Role,
+  ) {
+    const session = await this.findSessionById(sessionId);
+    if (session.hostId !== requesterId && requesterRole !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Only the host or admin can delete this session',
+      );
+    }
+    return this.liveRepository.deleteSession(sessionId);
+  }
+
   // ── Participant management ──────────────────────────────────────────────────
 
   async joinSession(

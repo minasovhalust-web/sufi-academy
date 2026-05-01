@@ -62,6 +62,8 @@ import {
   ImageIcon,
   CalendarDays,
   BarChart2,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react'
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -1010,6 +1012,7 @@ function LiveSessionsList({ courseId }: { courseId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [endingId, setEndingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchSessions = () => {
     liveApi.getSessionsByCourse(courseId)
@@ -1033,23 +1036,77 @@ function LiveSessionsList({ courseId }: { courseId: string }) {
     }
   }
 
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm('Удалить этот эфир?')) return
+    setDeletingId(sessionId)
+    try {
+      await liveApi.deleteSession(sessionId)
+      setSessions(prev => prev.filter(s => s.id !== sessionId))
+      toast.success('Эфир удалён')
+    } catch {
+      toast.error('Не удалось удалить эфир')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleSaveTitle = async (sessionId: string) => {
+    if (editTitle.trim()) {
+      try {
+        await liveApi.updateSession(sessionId, { title: editTitle.trim() })
+        setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: editTitle.trim() } : s))
+      } catch {
+        toast.error('Не удалось обновить название')
+      }
+    }
+    setEditingId(null)
+  }
+
+  const moveSession = (index: number, direction: -1 | 1) => {
+    const newIndex = index + direction
+    if (newIndex < 0 || newIndex >= sessions.length) return
+    setSessions(prev => {
+      const arr = [...prev]
+      const tmp = arr[index]
+      arr[index] = arr[newIndex]
+      arr[newIndex] = tmp
+      return arr
+    })
+  }
+
   if (loading) return <p className="text-sm text-gray-400 py-2">Загрузка эфиров...</p>
   if (sessions.length === 0) return <p className="text-sm text-gray-400 py-2">Эфиров пока нет</p>
 
   return (
     <div className="space-y-2">
-      {sessions.map(session => (
+      {sessions.map((session, idx) => (
         <div key={session.id} className={`flex items-center gap-3 rounded-lg border p-3 ${
           session.status === 'LIVE' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'
         }`}>
+          <div className="flex flex-col gap-0.5 shrink-0">
+            <button
+              onClick={() => moveSession(idx, -1)}
+              disabled={idx === 0}
+              className="p-0.5 rounded text-gray-400 hover:text-gray-600 disabled:opacity-20"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+            <button
+              onClick={() => moveSession(idx, 1)}
+              disabled={idx === sessions.length - 1}
+              className="p-0.5 rounded text-gray-400 hover:text-gray-600 disabled:opacity-20"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+          </div>
           <Radio className={`h-4 w-4 shrink-0 ${session.status === 'LIVE' ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
           <div className="flex-1 min-w-0">
             {editingId === session.id ? (
               <input
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
-                onBlur={() => setEditingId(null)}
-                onKeyDown={e => { if (e.key === 'Enter') setEditingId(null) }}
+                onBlur={() => handleSaveTitle(session.id)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveTitle(session.id); if (e.key === 'Escape') setEditingId(null) }}
                 className="text-sm font-medium w-full border-b border-gray-300 bg-transparent outline-none py-0.5"
                 autoFocus
               />
@@ -1057,7 +1114,7 @@ function LiveSessionsList({ courseId }: { courseId: string }) {
               <p
                 className="text-sm font-medium truncate cursor-pointer hover:text-indigo-600"
                 onClick={() => { setEditingId(session.id); setEditTitle(session.title) }}
-                title="Нажмите чтобы редактировать"
+                title="Нажмите чтобы редактировать название"
               >
                 {session.title}
               </p>
@@ -1094,6 +1151,14 @@ function LiveSessionsList({ courseId }: { courseId: string }) {
                 </Button>
               </>
             )}
+            <button
+              onClick={() => handleDeleteSession(session.id)}
+              disabled={deletingId === session.id}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+              title="Удалить эфир"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         </div>
       ))}
