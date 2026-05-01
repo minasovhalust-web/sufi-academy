@@ -939,10 +939,10 @@ export default function LiveSessionPage({ params }: { params: { sessionId: strin
       const uploadData = uploadRes.data?.data ?? uploadRes.data
       const storageKey: string = (uploadData as { url?: string })?.url ?? (uploadData as { key?: string })?.key ?? ''
       if (courseId && storageKey) {
-        const modRes = await coursesApi.createModule(courseId, { title })
+        const modRes = await coursesApi.createModule(courseId, { title, order: 999 })
         const mod = modRes.data?.data ?? modRes.data
         const moduleId: string = (mod as { id: string }).id
-        const lessonRes = await coursesApi.createLesson(courseId, moduleId, { title })
+        const lessonRes = await coursesApi.createLesson(courseId, moduleId, { title, order: 1 })
         const lesson = lessonRes.data?.data ?? lessonRes.data
         const lessonId: string = (lesson as { id: string }).id
         await videosApi.create({ title, lessonId, storageKey, mimeType, duration: 0 })
