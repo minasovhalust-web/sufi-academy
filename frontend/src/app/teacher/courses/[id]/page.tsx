@@ -159,18 +159,31 @@ function VideoSection({ lessonId }: { lessonId: string }) {
     setUploadError(null)
 
     try {
-      // Step 1: upload file to local storage via the generic upload endpoint.
-      // apiClient already carries the JWT token (via the request interceptor)
-      // and automatically removes Content-Type so the browser sets the correct
-      // multipart/form-data boundary.
+      // Step 1: upload file directly to upload.muzasufy.com (bypasses Cloudflare)
+      const authState = JSON.parse(localStorage.getItem('auth-storage') || '{}')
+      const token = authState?.state?.accessToken ?? ''
       const form = new FormData()
       form.append('file', file)
-      const uploadRes = await apiClient.post('/storage/upload', form, {
-        onUploadProgress: (e) => {
+
+      const xhr = new XMLHttpRequest()
+      const uploadUrl = await new Promise<string>((resolve, reject) => {
+        xhr.open('POST', 'https://upload.muzasufy.com/api/v1/storage/upload')
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+        xhr.upload.onprogress = (e) => {
           if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100))
-        },
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const data = JSON.parse(xhr.responseText)
+            resolve(data.data.url)
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`))
+          }
+        }
+        xhr.onerror = () => reject(new Error('Network error during upload'))
+        xhr.send(form)
       })
-      const { url } = uploadRes.data.data as { url: string }
+      const url = uploadUrl
 
       setUploadProgress(100)
 
