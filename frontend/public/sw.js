@@ -22,28 +22,27 @@ self.addEventListener('activate', (e) => {
 })
 
 self.addEventListener('fetch', (e) => {
-  // Only cache GET requests; skip API calls and cross-origin requests
   const { request } = e
+  // Only handle GET requests on same origin — skip everything else
   if (request.method !== 'GET') return
   const url = new URL(request.url)
+  // Skip cross-origin requests (e.g. upload.muzasufy.com)
   if (url.origin !== location.origin) return
+  // Skip API calls
   if (url.pathname.startsWith('/api/')) return
+  // Skip socket.io
+  if (url.pathname.startsWith('/socket.io')) return
 
   e.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached
       return fetch(request).then((response) => {
-        // Cache successful responses for static assets
-        if (
-          response.ok &&
-          (url.pathname.startsWith('/_next/static/') ||
-            url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff2?)$/))
-        ) {
+        if (response.ok && (url.pathname.startsWith('/_next/static/') || url.pathname.match(/\.(png|jpg|jpeg|svg|ico|woff2?)$/))) {
           const clone = response.clone()
           caches.open(CACHE_NAME).then((c) => c.put(request, clone))
         }
         return response
-      })
+      }).catch(() => cached || new Response('', {status: 408}))
     })
   )
 })
